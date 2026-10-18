@@ -1,7 +1,7 @@
 # Extra Options
 
 [RokkuDayo's Extra Options](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions) for Forza
-Horizon 2, as an FH2 Mod Loader mod.
+Horizon 2, as a standalone mod.
 
 ## Features
 
