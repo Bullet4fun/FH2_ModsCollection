@@ -25,6 +25,10 @@ python build.py path\to\zig.exe --discord --output FH2_DiscordRPC.dll
 python tests\run.py path\to\zig.exe
 ```
 
+## AI usage disclosure
+
+Claude was used in this project to create the mods and fork [Extra Options](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions) to make it a standalone mod.
+
 ## License
 
 GPL-3.0. Extra Options is a fork of
