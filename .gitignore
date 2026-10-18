@@ -1,0 +1,15 @@
+# build outputs
+*.dll
+*.exe
+*.obj
+*.lib
+target/
+target-*/
+
+# Spotify receiver runtime files (credentials.json holds the Spotify login token)
+credentials.json
+state.json
+nowplaying.txt
+nowplaying.tmp
+*.log
+__pycache__/

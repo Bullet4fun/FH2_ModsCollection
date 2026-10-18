@@ -1,0 +1,38 @@
+From dfea45e41eafd41a520824acaa3a8ff02e1c4c23 Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 13:45:49 +0300
+Subject: [PATCH] playback: fail the load when the audio key does not arrive
+
+Continuing without decryption turned a key timeout (a track preloaded on a session that had just dropped) into a decoder error that left playback stopped for good. Failing the load lets the player skip to the next track.
+
+---
+ playback/src/player.rs | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/playback/src/player.rs b/playback/src/player.rs
+index 9c09be5..c4be789 100644
+--- a/playback/src/player.rs
++++ b/playback/src/player.rs
+@@ -1073,14 +1073,14 @@ impl PlayerTrackLoader {
+ 
+             let stream_loader_controller = encrypted_file.get_stream_loader_controller().ok()?;
+ 
+-            // Not all audio files are encrypted. If we can't get a key, try loading the track
+-            // without decryption. If the file was encrypted after all, the decoder will fail
+-            // parsing and bail out, so we should be safe from outputting ear-piercing noise.
++            // Fail the load when the key does not arrive, so the player skips to the next track.
++            // Continuing without decryption turned a key timeout (a track preloaded on a session
++            // that had just dropped) into a decoder error that left playback stopped for good.
+             let key = match self.session.audio_key().request(track_id, file_id).await {
+                 Ok(key) => Some(key),
+                 Err(e) => {
+-                    warn!("Unable to load key, continuing without decryption: {e}");
+-                    None
++                    error!("Unable to load key, failing the load: {e}");
++                    return None;
+                 }
+             };
+ 
+-- 
+2.42.0.windows.2
+
