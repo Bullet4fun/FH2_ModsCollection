@@ -23,7 +23,7 @@ Unzip `FH2_ExtraOptions.zip` into `data\bin\`.
 
 ## Controls
 
-| | |
+| Action | Button |
 |---|---|
 | Autodrive | D-pad down (F2 on keyboard) |
 | Headlights | click the right stick |
