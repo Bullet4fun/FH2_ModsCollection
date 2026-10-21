@@ -16,8 +16,6 @@ tune the car radio to Xbox Music.
 Your Spotify login is saved in `data\bin\mods\FH2_SpotifyRadio\credentials.json`. Never share that
 file.
 
-For a Spotify logo on the station icon, enable `[Files] EnableMediaOverrides=1` in Extra Options.
-
 ## Build librespot
 
 `librespot.exe` is [librespot](https://github.com/librespot-org/librespot) 0.8.0 with the three
