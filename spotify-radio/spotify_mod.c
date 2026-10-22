@@ -29,8 +29,8 @@ static int same_ignore_case(const wchar_t *a, const wchar_t *b) {
 static wchar_t logo_source[PATH_CAPACITY], logo_target[PATH_CAPACITY], logo_record[PATH_CAPACITY];
 static wchar_t logo_previous[PATH_CAPACITY];
 
-/* Copies the mod's logo over the Xbox Music station's HUD icon in mediaoverride (needs ExtraOptions'
-   EnableMediaOverrides=1). Only the file this mod placed last time (logo_installed.txt) is ever
+/* Copies the mod's logo over the Xbox Music station's HUD icon in mediaoverride, which the game reads
+   by itself. Only the file this mod placed last time (logo_installed.txt) is ever
    removed; an icon override the mod did not place is left alone. */
 static void install_logo(const FH2ModHost *host) {
     if (!path_join(logo_source, host->data_dir, L"HUD_RadioIcon_Spotify.swatchbin") ||
