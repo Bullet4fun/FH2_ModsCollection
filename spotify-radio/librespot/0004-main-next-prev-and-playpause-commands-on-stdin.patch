@@ -1,0 +1,55 @@
+From 42793ab1e40fb4c9ef22591fa3ccc0540428667a Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 19:05:06 +0300
+Subject: [PATCH 4/6] main: next, prev and playpause commands on stdin
+
+One command per line. The game mod sends them from the controller and keyboard.
+---
+ src/main.rs | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/src/main.rs b/src/main.rs
+index fb85803..d2e81a9 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2005,8 +2005,37 @@ async fn main() {
+         }
+     }
+ 
++    // Track commands, one per line on stdin: next, prev, playpause. A blocking thread, so the
++    // runtime needs no extra tokio features; it ends with stdin.
++    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
++    std::thread::spawn(move || {
++        use std::io::BufRead;
++        for line in std::io::stdin().lock().lines() {
++            let Ok(line) = line else { break };
++            if command_tx.send(line.trim().to_ascii_lowercase()).is_err() {
++                break;
++            }
++        }
++    });
++
+     loop {
+         tokio::select! {
++            Some(command) = command_rx.recv() => {
++                if let Some(spirc) = spirc.as_ref() {
++                    let result = match command.as_str() {
++                        "next" => spirc.next(),
++                        "prev" => spirc.prev(),
++                        "playpause" => spirc.play_pause(),
++                        _ => {
++                            warn!("unknown stdin command: {command}");
++                            Ok(())
++                        }
++                    };
++                    if let Err(e) = result {
++                        warn!("stdin command {command} failed: {e}");
++                    }
++                }
++            },
+             credentials = async {
+                 match discovery.as_mut() {
+                     Some(d) => d.next().await,
+-- 
+2.42.0.windows.2
+

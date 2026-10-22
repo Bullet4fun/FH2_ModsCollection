@@ -1,4 +1,5 @@
 #include "spotify_bridge.h"
+#include "track_controls.h"
 #include "logging.h"
 #include "support.h"
 #include "pinyin_table.h"
@@ -1013,6 +1014,88 @@ static void *xbox_option_visible_hook(void *out, void *property, unsigned char *
     return g_orig_xbox_option_visible(out, property, model, extra);
 }
 
+/* The logo folder: game:\spotifyradio\ is mounted over game:\media\ on the game's first file lookup,
+   the way the game mounts its own folders, below the mediaoverride and mediapc folders Extra Options
+   mounts (a user's own override wins). A jmp hook on the lookup itself, so it works with or without
+   Extra Options, which replaces the vtable slot that calls it. */
+typedef struct {
+    const char *data;
+    uintptr_t reserved;
+    size_t length, capacity;
+} GameString;
+typedef unsigned char (*ResolveFileFn)(void *, void **, void *, const void *, unsigned char, unsigned char,
+                                       unsigned char, void **, unsigned char);
+static ResolveFileFn g_orig_resolve = NULL;
+static unsigned char *g_mount_image;
+static unsigned char (*g_folder_file_exists)(void *, const GameString *) = NULL;
+static void *g_folder_vtable[1 + 0x1f0 / sizeof(void *)];
+static volatile LONG g_mount_state = 0;
+
+static GameString game_string(const char *text) {
+    return (GameString){text, 0, text_length(text), 31};
+}
+
+static unsigned char folder_file_exists_hook(void *volume, const GameString *path) {
+    const char *text = path->capacity < 16 ? (const char *)path : path->data;
+    for (size_t i = 0; i < path->length; ++i) { // archive selectors such as <*>0 are not filenames
+        unsigned char c = (unsigned char)text[i];
+        if (c < 32 || c == '<' || c == '>' || c == '*' || c == '?' || c == '"' || c == '|') {
+            return 0;
+        }
+    }
+    return g_folder_file_exists(volume, path);
+}
+
+static void mount_logo_folder(void *filesystem) {
+    void *root;
+    if (g_mount_state || !memory_read((unsigned char *)filesystem + 0x68, &root, sizeof(root)) || !root ||
+        InterlockedCompareExchange(&g_mount_state, 1, 0) != 0) {
+        return;
+    }
+    int mounted = 0;
+    void *storage = ((void *(*)(size_t))(g_mount_image + 0x3229c0))(0x50);
+    if (storage) {
+        GameString source = game_string("game:\\spotifyradio\\");
+        GameString destination = game_string("game:\\media\\");
+        void *volume = ((void *(*)(void *, const void *, unsigned char))(g_mount_image + 0x11e05a0))(storage, &source, 1);
+        *(void ***)volume = g_folder_vtable + 1;
+        void **methods = *(void ***)volume;
+        ((void (*)(void *))methods[0x10 / 8])(volume);
+        void **filesystem_methods = *(void ***)filesystem;
+        mounted = ((unsigned char (*)(void *, const void *, void **, unsigned, unsigned char, unsigned char,
+                                      const void *))filesystem_methods[0x1e8 / 8])(filesystem, &destination, &volume,
+                                                                                   0x7ffffffc, 0, 0, 0);
+        ((void (*)(void *))methods[0x18 / 8])(volume);
+        ((void (*)(void *))filesystem_methods[0x1f8 / 8])(filesystem);
+    }
+    InterlockedExchange(&g_mount_state, 2);
+    log_append(mounted ? "SPOTIFY: logo folder mounted; Xbox Music shows the Spotify logo.\r\n"
+                       : "SPOTIFY: logo folder mount failed; Xbox Music keeps its logo.\r\n");
+}
+
+static unsigned char resolve_file_hook(void *filesystem, void **volume, void *relative_path, const void *path,
+                                       unsigned char flag1, unsigned char flag2, unsigned char flag3, void **mount,
+                                       unsigned char flag4) {
+    mount_logo_folder(filesystem);
+    return g_orig_resolve(filesystem, volume, relative_path, path, flag1, flag2, flag3, mount, flag4);
+}
+
+void spotify_bridge_mount_logo_folder(unsigned char *game_image) {
+    // mov rax,rsp / mov [rax+20h],r9 / mov [rax+10h],rdx / mov [rax+8],rcx = 15 bytes
+    static const unsigned char resolve_prologue[15] = {0x48, 0x8b, 0xc4, 0x4c, 0x89, 0x48, 0x20, 0x48,
+                                                       0x89, 0x50, 0x10, 0x48, 0x89, 0x48, 0x08};
+    g_mount_image = game_image;
+    memory_copy(g_folder_vtable, game_image + 0x2eab910, sizeof(g_folder_vtable)); // keeps the RTTI slot
+    g_folder_file_exists = (unsigned char (*)(void *, const GameString *))g_folder_vtable[1 + 0xe8 / 8];
+    g_folder_vtable[1 + 0xe8 / 8] = (void *)folder_file_exists_hook;
+    if (memory_equal(game_image + 0x11f49b0, resolve_prologue, sizeof(resolve_prologue))) {
+        g_orig_resolve = (ResolveFileFn)install_jmp_hook(game_image + 0x11f49b0, sizeof(resolve_prologue),
+                                                         (void *)&resolve_file_hook);
+    }
+    log_append(g_orig_resolve ? "SPOTIFY: logo installed; its folder is mounted on the game's first file lookup.\r\n"
+                              : "SPOTIFY: file lookup hook skipped (unexpected code); Xbox Music keeps its logo.\r\n");
+}
+
 void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
     if (!game_image || g_orig_playSound) {
         return;
@@ -1119,6 +1202,71 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
                                 : "SPOTIFY: FMOD radio hook skipped (unexpected code); Spotify will not play.\r\n");
 }
 
+/* Track buttons (track_controls.c): polled with the now-playing check, sent to librespot's stdin
+   as next/prev/playpause. Only while Xbox Music (Spotify Radio) plays and the game has the focus. */
+static HANDLE g_command_write = NULL;
+static unsigned char *g_controls_image;
+static SHORT(WINAPI *g_key_state)(int) = NULL;
+static HWND(WINAPI *g_foreground_window)(void) = NULL;
+static DWORD(WINAPI *g_window_process)(HWND, LPDWORD) = NULL;
+
+static int game_focused(void) {
+    if (!g_foreground_window || !g_window_process) {
+        return 0;
+    }
+    DWORD process = 0;
+    HWND window = g_foreground_window();
+    if (window) {
+        g_window_process(window, &process);
+    }
+    return process == GetCurrentProcessId();
+}
+
+// The buttons held on the game's active controller (the same read as Extra Options' autodrive).
+static unsigned short game_buttons(void) {
+    void *manager, *vtable, *controller;
+    unsigned char connected;
+    unsigned short buttons = 0;
+    unsigned char *image = g_controls_image;
+    if (!image || !memory_read_pointer(image + 0x365d7c8, &manager) || !memory_read_pointer(manager, &vtable) ||
+        vtable != image + 0x2e7a2e8 || !memory_read_pointer((unsigned char *)manager + 0xab28, &controller)) {
+        return 0;
+    }
+    uintptr_t first = (uintptr_t)manager + 0x10, selected = (uintptr_t)controller;
+    if (selected < first || selected >= first + 8 * 0x1300 || (selected - first) % 0x1300 ||
+        !memory_read((unsigned char *)controller + 4, &connected, 1) || connected != 1 ||
+        !memory_read((unsigned char *)controller + 0xc0, &buttons, sizeof(buttons))) {
+        return 0;
+    }
+    return buttons;
+}
+
+static void poll_track_controls(void) {
+    static const char *const lines[TRACK_COMMANDS] = {NULL, "next\n", "prev\n", "playpause\n"};
+    unsigned char keys[TRACK_COMMANDS] = {0};
+    int active = g_xbox_selected && game_focused();
+    unsigned short buttons = active ? game_buttons() : 0;
+    for (unsigned c = 1; active && g_key_state && c < TRACK_COMMANDS; ++c) {
+        unsigned char key = track_bindings[c][1].key;
+        keys[c] = key && (g_key_state(key) & 0x8000) != 0;
+    }
+    int command = track_controls_step(buttons, keys, GetTickCount64());
+    if (command && g_command_write) {
+        DWORD written;
+        WriteFile(g_command_write, lines[command], (DWORD)text_length(lines[command]), &written, NULL);
+    }
+}
+
+void spotify_bridge_install_controls(unsigned char *game_image) {
+    g_controls_image = game_image;
+    HMODULE user32 = LoadLibraryExW(L"user32.dll", 0, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (user32) {
+        g_key_state = (SHORT(WINAPI *)(int))(uintptr_t)GetProcAddress(user32, "GetAsyncKeyState");
+        g_foreground_window = (HWND(WINAPI *)(void))(uintptr_t)GetProcAddress(user32, "GetForegroundWindow");
+        g_window_process = (DWORD(WINAPI *)(HWND, LPDWORD))(uintptr_t)GetProcAddress(user32, "GetWindowThreadProcessId");
+    }
+}
+
 static wchar_t s_exe_path[PATH_CAPACITY];
 static wchar_t s_cmdline[512];
 
@@ -1140,6 +1288,10 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
     }
 
     SetHandleInformation(hPipeRead, 1 /* HANDLE_FLAG_INHERIT */, 0);
+    HANDLE hCommandRead = NULL; // librespot's stdin: next/prev/playpause from the track buttons
+    if (CreatePipe(&hCommandRead, &g_command_write, &sa, 0)) {
+        SetHandleInformation(g_command_write, 1 /* HANDLE_FLAG_INHERIT */, 0);
+    }
 
     HANDLE hNul = CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, NULL);
     STARTUPINFOW si;
@@ -1157,7 +1309,7 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
         hLog = CreateFileW(log_path, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, 0, NULL);
     }
     si.hStdError = (hLog != INVALID_HANDLE_VALUE) ? hLog : (hNul != INVALID_HANDLE_VALUE) ? hNul : NULL;
-    si.hStdInput = (hNul != INVALID_HANDLE_VALUE) ? hNul : NULL;
+    si.hStdInput = hCommandRead ? hCommandRead : (hNul != INVALID_HANDLE_VALUE) ? hNul : NULL;
 
     PROCESS_INFORMATION pi;
     memory_copy(&pi, &(PROCESS_INFORMATION){0}, sizeof(pi));
@@ -1198,10 +1350,16 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
         CloseHandle(hNul);
     }
     CloseHandle(hPipeWrite);
+    if (hCommandRead) {
+        CloseHandle(hCommandRead); // the child keeps its copy
+    }
 
-    while (g_bridge_running) {
-        now_playing_poll();
-        Sleep(500);
+    for (unsigned tick = 0; g_bridge_running; ++tick) {
+        poll_track_controls();
+        if (tick % 32 == 0) {
+            now_playing_poll();
+        }
+        Sleep(15);
     }
     return 0;
 }

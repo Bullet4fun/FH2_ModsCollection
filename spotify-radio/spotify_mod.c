@@ -2,6 +2,7 @@
    game's own "Xbox Music" station, with Now Playing on the radio HUD. No settings. Its folder
    mods\FH2_SpotifyRadio\ holds the log, librespot.exe, onevent.cmd and librespot's files (Spotify
    login, volume, nowplaying.txt). */
+#include "track_controls.h"
 #include "fh2_mod.h"
 #include "spotify_bridge.h"
 #include "logging.h"
@@ -29,27 +30,27 @@ static int same_ignore_case(const wchar_t *a, const wchar_t *b) {
 static wchar_t logo_source[PATH_CAPACITY], logo_target[PATH_CAPACITY], logo_record[PATH_CAPACITY];
 static wchar_t logo_previous[PATH_CAPACITY];
 
-/* Copies the mod's logo over the Xbox Music station's HUD icon in mediaoverride, which the game reads
-   by itself. Only the file this mod placed last time (logo_installed.txt) is ever
-   removed; an icon override the mod did not place is left alone. */
-static void install_logo(const FH2ModHost *host) {
+/* Copies the mod's logo into Mount\spotifyradio\, a folder only this mod uses, as the Xbox Music
+   station's HUD icon; the mod mounts that folder into the game's files itself. A logo this mod placed
+   somewhere else last time (logo_installed.txt) is removed. 1: the logo is in place. */
+static int install_logo(const FH2ModHost *host) {
     if (!path_join(logo_source, host->data_dir, L"HUD_RadioIcon_Spotify.swatchbin") ||
         !path_join(logo_record, host->data_dir, L"logo_installed.txt") ||
         GetFileAttributesW(logo_source) == INVALID_FILE_ATTRIBUTES) {
         log_append("SPOTIFY: no HUD_RadioIcon_Spotify.swatchbin in the mod folder; Xbox Music keeps its logo.\r\n");
-        return;
+        return 0;
     }
-    size_t cut = 0; // game_exe is ...\Mount\forza_durango_release_final.exe; mediaoverride is beside it
+    size_t cut = 0; // game_exe is ...\Mount\forza_durango_release_final.exe; the folder goes beside it
     for (size_t i = 0; host->game_exe[i]; ++i) {
         if (host->game_exe[i] == L'\\' || host->game_exe[i] == L'/') cut = i + 1;
     }
     for (size_t i = 0; i < cut; ++i) logo_target[i] = host->game_exe[i];
     logo_target[cut] = 0;
-    if (!path_join(logo_target, logo_target, L"mediaoverride\\ui\\textures\\Anthem\\HUD\\") ||
+    if (!path_join(logo_target, logo_target, L"spotifyradio\\ui\\textures\\Anthem\\HUD\\") ||
         !path_join(logo_target, logo_target, L"HUD_RadioIcon_Xbox_Music.swatchbin")) {
-        return;
+        return 0;
     }
-    for (size_t i = cut; logo_target[i]; ++i) { // create mediaoverride\ui\textures\Anthem\HUD\ as needed
+    for (size_t i = cut; logo_target[i]; ++i) { // create spotifyradio\ui\textures\Anthem\HUD\ as needed
         if (logo_target[i] == L'\\') {
             logo_target[i] = 0;
             CreateDirectoryW(logo_target, NULL);
@@ -64,18 +65,12 @@ static void install_logo(const FH2ModHost *host) {
         CloseHandle(record);
     }
     logo_previous[got / sizeof(wchar_t)] = 0;
-    int ours = logo_previous[0] && same_ignore_case(logo_previous, logo_target);
-    if (logo_previous[0] && !ours) {
-        DeleteFileW(logo_previous); // this mod placed it elsewhere last time
-    }
-    if (!ours && GetFileAttributesW(logo_target) != INVALID_FILE_ATTRIBUTES) {
-        DeleteFileW(logo_record);
-        log_append("SPOTIFY: the Xbox Music icon already has an override this mod did not place; left alone.\r\n");
-        return;
+    if (logo_previous[0] && !same_ignore_case(logo_previous, logo_target)) {
+        DeleteFileW(logo_previous);
     }
     if (!CopyFileW(logo_source, logo_target, FALSE)) {
-        log_append("SPOTIFY: could not copy the logo into mediaoverride.\r\n");
-        return;
+        log_append("SPOTIFY: could not copy the logo into the game's spotifyradio folder.\r\n");
+        return 0;
     }
     record = CreateFileW(logo_record, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (record != INVALID_HANDLE_VALUE) {
@@ -85,7 +80,7 @@ static void install_logo(const FH2ModHost *host) {
         WriteFile(record, logo_target, (DWORD)(length * sizeof(wchar_t)), &written, NULL);
         CloseHandle(record);
     }
-    log_append("SPOTIFY: logo installed over the Xbox Music HUD icon.\r\n");
+    return 1;
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
@@ -108,7 +103,11 @@ __declspec(dllexport) int FH2ModLoad(const FH2ModHost *host) {
         MoveFileExW(path, previous, MOVEFILE_REPLACE_EXISTING);
         mod_log_open(path);
     }
-    install_logo(host);
+    if (install_logo(host)) {
+        spotify_bridge_mount_logo_folder(host->game_image);
+    }
+    track_controls_load(host->data_dir);
+    spotify_bridge_install_controls(host->game_image);
     spotify_bridge_start(host->data_dir);
     spotify_bridge_apply_audio_hook(host->game_image);
     return 1;

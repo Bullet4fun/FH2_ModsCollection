@@ -6,12 +6,13 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-SPOTIFY = ["common/support.c", "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c"]
+SPOTIFY = ["common/support.c", "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c", "spotify-radio/track_controls.c"]
 TESTS = [  # (source, extra sources)
     ("tests/test_translit.c", SPOTIFY),
     ("tests/test_live_buffer.c", SPOTIFY),
     ("tests/test_spotify_bridge.c", SPOTIFY),
     ("tests/test_spotify_mod.c", SPOTIFY + ["common/mod_log.c"]),
+    ("tests/test_track_controls.c", ["common/support.c", "common/mod_log.c"]),
     ("tests/test_eo_settings.c", ["common/support.c"]),
 ]
 

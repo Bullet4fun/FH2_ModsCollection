@@ -13,12 +13,16 @@ Unzip `FH2_SpotifyRadio.zip` into `data\bin\`. librespot needs the
 Start the game, open Spotify on any device and pick **Forza Horizon 2 Radio** as the speaker, then
 tune the car radio to Spotify Radio.
 
+While Spotify Radio plays: tap the left stick for the next track, tap it twice for the previous one
+(F6 and F5 on the keyboard, F7 play/pause). Change the buttons in
+`data\bin\mods\FH2_SpotifyRadio\FH2_SpotifyRadio.ini`; it explains itself.
+
 Your Spotify login is saved in `data\bin\mods\FH2_SpotifyRadio\credentials.json`. Never share that
 file.
 
 ## Build librespot
 
-`librespot.exe` is [librespot](https://github.com/librespot-org/librespot) 0.8.0 with the three
+`librespot.exe` is [librespot](https://github.com/librespot-org/librespot) 0.8.0 with the
 patches in `librespot/` applied (`git am`), built with Rust's MSVC toolchain:
 `cargo build --release`.
 
