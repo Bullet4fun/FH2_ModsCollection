@@ -10,6 +10,9 @@ Unzip `FH2_SpotifyRadio.zip` into `data\bin\`. librespot needs the
 
 ## Use
 
+The first time Spotify Radio starts, your browser opens the Spotify sign-in page: sign in once and
+the login is saved.
+
 Start the game, open Spotify on any device and pick **Forza Horizon 2 Radio** as the speaker, then
 tune the car radio to Spotify Radio.
 
