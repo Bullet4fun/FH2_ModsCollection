@@ -99,17 +99,7 @@ static struct {
 
 static void finish_roof_transition(void);
 
-#ifdef FH2_TWEAKS_TEST
-static int use_test_clock;
-static uint64_t test_clock;
-#endif
-
 static uint64_t clock_milliseconds(void) {
-#ifdef FH2_TWEAKS_TEST
-    if (use_test_clock) {
-        return test_clock;
-    }
-#endif
     return GetTickCount64();
 }
 
@@ -574,29 +564,3 @@ static void vehicle_update(void *self, float dt, float frame_dt, unsigned frame)
     }
     autodrive_game_release_car(local_car);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestVehicleHookAddress(void) {
-    return (void *)vehicle_update;
-}
-
-__declspec(dllexport) void Fh2TestVehicleReset(void) {
-    finish_roof_transition();
-    blinkers_reset();
-    gesture = (VehicleGesture){.blocked = 1};
-    headlights = (HeadlightState){0};
-    roof = (RoofState){0};
-    popup_lights.active = 0;
-    car_meet_car = car_meet_animation = NULL;
-    roof_lock.remaining = 0.0f;
-}
-
-__declspec(dllexport) void Fh2TestVehicleTime(uint64_t milliseconds) {
-    use_test_clock = 1;
-    test_clock = milliseconds;
-}
-
-__declspec(dllexport) int Fh2TestVehicleRoofBusy(void) {
-    return roof_is_busy(roof_lock.car);
-}
-#endif

@@ -428,13 +428,3 @@ void drift_camera_commit_options(const ModOptions *options) {
         chase_slide_blend[view] = 0;
     }
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestDriftCameraHookAddress(void) {
-    return (void *)momentum_heading;
-}
-
-__declspec(dllexport) void *Fh2TestDriftViewHookAddress(unsigned index) {
-    return index ? (void *)update_mounted_camera : (void *)update_chase_heading;
-}
-#endif

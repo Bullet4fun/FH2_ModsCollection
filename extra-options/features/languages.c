@@ -254,9 +254,6 @@ static void language_reload_hook(void *self) {
         language_set_code(self, language_codes[index]);
         original_language_reload(self);
         language_refresh();
-        log_append("LANGUAGE: native text tables reloaded for ");
-        log_append(language_codes[index]);
-        log_append(".\r\n");
     } else {
         original_language_reload(self);
     }
@@ -314,14 +311,3 @@ int language_parse_setting(const char *value, int audio, int *setting) {
 const char *language_diagnostics_get(void) {
     return language_diagnostics;
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void Fh2TestResetLanguageState(void) {
-    language_objects_image = 0;
-    selected_text_language = -1;
-}
-
-__declspec(dllexport) void *Fh2TestLanguageHookAddress(void) {
-    return (void *)language_reload_hook;
-}
-#endif

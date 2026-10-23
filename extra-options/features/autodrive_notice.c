@@ -169,9 +169,3 @@ void autodrive_notice_clear(void) {
     autodrive_game_release_shared(&notice.hud.wrapper);
     notice.hud = (AutodriveHud){0};
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestAutodriveNoticeHookAddress(void) {
-    return (void *)notice_convert;
-}
-#endif

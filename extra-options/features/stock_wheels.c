@@ -214,20 +214,6 @@ static unsigned char load_stock_wheels(void *part, const GameString *name) {
     return replace_models(part, models, textures);
 }
 
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestStockWheelPath(const char *name, unsigned kind, unsigned corner,
-                                                char *output, size_t capacity) {
-    GameString key = borrowed_string(name);
-    const StockWheelAssets *wheel = find_wheel(&key);
-    if (!wheel || kind > 1 || corner >= 4) {
-        return 0;
-    }
-    const StockWheelLayout *layout = kind ? &stock_texture_layouts[wheel->texture_layout]
-                                          : &stock_model_layouts[wheel->model_layout];
-    return build_asset_path(output, capacity, wheel, layout->paths[corner]);
-}
-#endif
-
 void stock_wheels_prepare_hooks(unsigned char *image) {
     game_image = image;
     assign_text = (AssignText)(image + 0x22c300);

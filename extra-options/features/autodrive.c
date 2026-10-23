@@ -249,17 +249,3 @@ void autodrive_prepare_hooks(unsigned char *image, const ModOptions *options) {
                                                       2};
     }
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestAutodriveState(void) {
-    return drive.car ? (drive.cinematic ? 2 : 1) : 0;
-}
-
-__declspec(dllexport) void *Fh2TestAutodriveHookAddress(unsigned index) {
-    uintptr_t address = 0;
-    if (index < 12) {
-        memory_copy(&address, hook_pointers[index], 8);
-    }
-    return (void *)address;
-}
-#endif

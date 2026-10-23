@@ -394,34 +394,3 @@ float drift_angle(unsigned view, float angle) {
     }
     return clamp_drift_angle(view, angle);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestDriftSettingGet(unsigned index) {
-    return index < DRIFT_SETTING_COUNT ? video_setting_get(index) : 0;
-}
-
-__declspec(dllexport) int Fh2TestDriftSettingSet(unsigned index, int value) {
-    return index < DRIFT_SETTING_COUNT && video_setting_set(index, value);
-}
-
-__declspec(dllexport) void Fh2TestDriftSettingsLoad(const wchar_t *directory) {
-    video_settings_load(directory);
-}
-
-__declspec(dllexport) void Fh2TestDriftSettingsReset(void) {
-    video_settings_reset();
-}
-
-__declspec(dllexport) int Fh2TestCameraSettingGet(unsigned index) {
-    return video_setting_get(index);
-}
-
-__declspec(dllexport) int Fh2TestCameraSettingSet(unsigned index, int value) {
-    return video_setting_set(index, value);
-}
-
-__declspec(dllexport) void Fh2TestSettingsSeed(ModOptions *options) {
-    video_settings_seed(options);
-    video_settings_apply(options);
-}
-#endif

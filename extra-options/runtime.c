@@ -10,49 +10,6 @@
 #include "adapters/azimuth_host.h"
 #endif
 
-static void log_enabled_features(const wchar_t *settings_directory, const ModOptions *options) {
-    log_set_directory(settings_directory);
-    if (options->garage_from_pause) {
-        log_append("GARAGE: XML parse hook installed; awaiting menu-flow resources.\r\n");
-    }
-    if (options->skip_ineligible_car_dialogue) {
-        log_append("FRONTEND: race dialogue skip enabled; awaiting race activation "
-                   "flow.\r\n");
-    }
-    if (options->skip_car_meet_on_startup) {
-        log_append("STARTUP: mainland car-meet boot skipped; Storm Island retains "
-                   "normal boot.\r\n");
-    }
-    if (options->spawn_at_festival && options->skip_car_meet_on_startup) {
-        log_append("STARTUP: mainland festival spawn enabled; Storm Island retains "
-                   "normal boot.\r\n");
-    }
-    if (options->media_overrides) {
-        log_append("FILES: native override hook installed; folders are mounted on "
-                   "the first "
-                   "file lookup outside DLL initialization.\r\n");
-    }
-    if (options->autodrive) {
-        log_append("AUTODRIVE: experimental F2 GPS/AI hooks installed; cinematic "
-                   "delay is 3 "
-                   "seconds.\r\n");
-    }
-    if (options->all_rims_category) {
-        log_append("UPGRADES: virtual All Rims category enabled; database file "
-                   "unchanged.\r\n");
-    }
-    log_append("VEHICLE: right-stick press toggles headlights; stationary "
-               "2-second hold toggles "
-               "supported roofs.\r\n");
-    log_append("SETTINGS: Video and HUD menu hooks installed; awaiting menu "
-               "resources.\r\n");
-    if (options->custom_gamerpic) {
-        log_append("GAMERPIC: converter hook installed; Gamerpic.png is read from "
-                   "the settings "
-                   "folder on the first local-player request.\r\n");
-    }
-}
-
 int runtime_initialize(unsigned char *game_image, const wchar_t *executable_path,
                        const wchar_t *settings_directory) {
     ModOptions options;
@@ -81,22 +38,7 @@ int runtime_initialize(unsigned char *game_image, const wchar_t *executable_path
     }
 #endif
     if (initialized && options.enabled) {
-        log_enabled_features(settings_directory, &options);
+        log_set_directory(settings_directory); // later lines: only what failed (the settings are above)
     }
     return initialized;
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestInitialize(void *base, const wchar_t *path,
-                                            const wchar_t *directory) {
-    return runtime_initialize(base, path, directory);
-}
-
-__declspec(dllexport) int Fh2TestVerifyFile(const wchar_t *path) {
-    return verify_game_file(path);
-}
-
-__declspec(dllexport) int Fh2TestReadOptions(const wchar_t *directory, ModOptions *options) {
-    return settings_read(directory, options);
-}
-#endif

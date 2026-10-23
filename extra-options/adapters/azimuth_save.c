@@ -52,9 +52,3 @@ void azimuth_apply_save_compatibility(int disable_checksums) {
                    "host is not a supported inspected save-validation build.\r\n");
     }
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestAzimuthSaveCompatibility(void *image, int disable_checksums) {
-    return disable_checksums ? apply_save(image) : 0;
-}
-#endif

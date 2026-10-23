@@ -107,7 +107,6 @@ static void activate_location(void *component) {
     location_island = island;
     ReleaseSRWLockExclusive(&location_lock);
     release_weak_location(previous);
-    log_append("GARAGE: native festival activation component ready.\r\n");
 }
 
 static int lock_location(GameShared *result, int *island) {
@@ -173,8 +172,9 @@ void return_garage_tick(void) {
                                     ? ((unsigned char (*)(void *, const char *))(image + 0x5641b0))(
                                           component, "garage._fh2_return_island")
                                     : ((unsigned char (*)(void *))(image + 0x564320))(component);
-        log_append(started ? "GARAGE: native location activation accepted.\r\n"
-                           : "GARAGE: native location activation declined.\r\n");
+        if (!started) {
+            log_append("GARAGE: native location activation declined.\r\n");
+        }
     }
     autodrive_game_release_shared(&location);
 }
@@ -262,7 +262,6 @@ static void accept_garage(GarageConfirmation *self) {
     pending_return.page = self->page;
     pending_return.behavior = *(void **)((unsigned char *)self->page + 0x310);
     pending_return.deadline = GetTickCount64() + 5000;
-    log_append("GARAGE: return confirmed; waiting for the dialog to close.\r\n");
 }
 
 static void update_pause(void *page) {
@@ -290,8 +289,6 @@ static void update_pause(void *page) {
     awaiting_garage = 1;
     garage_deadline = GetTickCount64() + 10000;
     ((Action)(image + 0xdb49e0))(page);
-    log_append(
-        "GARAGE: normal pause-menu exit requested; waiting for native location activation.\r\n");
 }
 
 static void *confirmation_vtable[] = {(void *)clone_confirmation, (void *)clone_confirmation,
@@ -392,33 +389,3 @@ void return_garage_prepare_hooks(unsigned char *base) {
                                                           2};
     }
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void Fh2TestReturnGarageReady(unsigned kind, unsigned char success) {
-    return_garage_resource_parsed(kind, success);
-}
-
-__declspec(dllexport) void *Fh2TestGarageConfirmation(void) {
-    return show_garage_confirmation;
-}
-
-__declspec(dllexport) void *Fh2TestGaragePauseInitialize(void) {
-    return initialize_pause;
-}
-
-__declspec(dllexport) void *Fh2TestGaragePauseUpdate(void) {
-    return update_pause;
-}
-
-__declspec(dllexport) void *Fh2TestGarageLocationActivate(void) {
-    return activate_location;
-}
-
-__declspec(dllexport) void Fh2TestGarageTick(void) {
-    return_garage_tick();
-}
-
-__declspec(dllexport) void Fh2TestGarageClearLocation(void) {
-    clear_location();
-}
-#endif

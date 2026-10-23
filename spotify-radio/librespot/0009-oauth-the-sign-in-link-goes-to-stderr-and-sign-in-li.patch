@@ -1,0 +1,40 @@
+From 746375c764fb9793efd9a41e85af038ca99d6ddc Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 21:39:57 +0300
+Subject: [PATCH] oauth: the sign-in link goes to stderr and sign-in-link.txt
+
+stdout is the audio pipe of the pipe backend, so the link was lost. Under Wine/Proton no browser opens: the link is also written next to librespot, to open by hand on the same machine.
+---
+ oauth/src/lib.rs | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/oauth/src/lib.rs b/oauth/src/lib.rs
+index 70e8333..fa322bc 100644
+--- a/oauth/src/lib.rs
++++ b/oauth/src/lib.rs
+@@ -24,7 +24,7 @@ use oauth2::{
+     StandardTokenResponse, TokenResponse, TokenUrl, basic::BasicClient, basic::BasicTokenType,
+ };
+ 
+-use log::{error, info, trace};
++use log::{error, info, trace, warn};
+ use thiserror::Error;
+ use url::Url;
+ 
+@@ -250,7 +250,12 @@ impl OAuthClient {
+         if self.should_open_url {
+             open::that_in_background(auth_url.as_str());
+         }
+-        println!("Browse to: {auth_url}");
++        // Not stdout: the pipe backend plays audio there. Under Wine/Proton no browser opens, so
++        // the link also goes to a file next to librespot, to open by hand on the same machine.
++        eprintln!("Browse to: {auth_url}");
++        if let Err(e) = std::fs::write("sign-in-link.txt", format!("{auth_url}\r\n")) {
++            warn!("Could not write sign-in-link.txt: {e}");
++        }
+ 
+         pkce_verifier
+     }
+-- 
+2.42.0.windows.2
+

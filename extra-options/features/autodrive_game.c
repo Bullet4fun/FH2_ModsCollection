@@ -49,8 +49,9 @@ void autodrive_game_bind(unsigned char *base) { image = base; }
 static int controller_status(int status) {
     static int previous = -2;
     if (status != previous) {
-        log_append(status < 0 ? "AUTODRIVE: active controller is unavailable.\r\n"
-                              : "AUTODRIVE: native controller button reader ready.\r\n");
+        if (status < 0) {
+            log_append("AUTODRIVE: active controller is unavailable.\r\n");
+        }
         previous = status;
     }
     return status;

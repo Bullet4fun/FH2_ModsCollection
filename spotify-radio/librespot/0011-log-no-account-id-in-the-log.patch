@@ -1,0 +1,54 @@
+From 5264321bdaa81c165ade95d5f01c867cf3cd6117 Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Fri, 23 Oct 2026 05:43:44 +0300
+Subject: [PATCH] log: no account id in the log
+
+The game mod's users attach librespot.log to public bug reports: the login and discovery lines no longer print the Spotify username.
+---
+ core/src/session.rs     | 2 +-
+ discovery/src/server.rs | 2 +-
+ src/main.rs             | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/core/src/session.rs b/core/src/session.rs
+index 333678f..e9d3569 100644
+--- a/core/src/session.rs
++++ b/core/src/session.rs
+@@ -243,7 +243,7 @@ impl Session {
+             .username
+             .as_ref()
+             .map_or("UNKNOWN", |s| s.as_str());
+-        info!("Authenticated as '{username}' !");
++        info!("Authenticated!"); // no account id: users post this log in public bug reports
+         self.set_username(username);
+         self.set_auth_data(&reusable_credentials.auth_data);
+         if let Some(cache) = self.cache() {
+diff --git a/discovery/src/server.rs b/discovery/src/server.rs
+index f4ce615..798e2f2 100644
+--- a/discovery/src/server.rs
++++ b/discovery/src/server.rs
+@@ -184,7 +184,7 @@ impl RequestHandler {
+             .map_err(|_| DiscoveryError::HmacError(base_key.to_vec()))?;
+         h.update(encrypted);
+         if h.verify_slice(cksum).is_err() {
+-            warn!("Login error for user {username:?}: MAC mismatch");
++            warn!("Login error: MAC mismatch");
+             let result = json!({
+                 "status": 102,
+                 "spotifyError": 1,
+diff --git a/src/main.rs b/src/main.rs
+index 4791829..46df3c7 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2057,7 +2057,7 @@ async fn main() {
+                     // downloaded, so every track was skipped: keep a live session of that user.
+                     Some(credentials) if spirc.is_some() && !connecting && !session.is_invalid()
+                         && credentials.username.as_deref() == Some(session.username().as_str()) => {
+-                        debug!("already logged in as {}; local login ignored", session.username());
++                        debug!("already logged in as that user; local login ignored");
+                     },
+                     Some(credentials) => {
+                         last_credentials = Some(credentials.clone());
+-- 
+2.42.0.windows.2
+

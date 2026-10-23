@@ -23,11 +23,23 @@ While Spotify Radio plays: tap the left stick for the next track, tap it twice f
 Your Spotify login is saved in `data\bin\mods\FH2_SpotifyRadio\credentials.json`. Never share that
 file.
 
+## Linux (Proton)
+
+The same files work under Proton. Tested with DW-Proton, Proton-GE, Proton (stable) and
+Proton-CachyOS, Azimuth started from Steam with no extra launch options; the sign-in page opens in
+the system browser.
+Other Proton versions are untested: feedback on how it runs for you is very welcome.
+
 ## Build librespot
 
 `librespot.exe` is [librespot](https://github.com/librespot-org/librespot) 0.8.0 with the
 patches in `librespot/` applied (`git am`), built with Rust's MSVC toolchain:
-`cargo build --release`.
+
+```text
+cargo build --release --no-default-features --features rustls-tls-webpki-roots,with-libmdns
+```
+
+rustls keeps TLS inside librespot: Wine's own TLS breaks its connections under Proton.
 
 `hud_logo/` makes the station icon, `generate_pinyin.py` and `generate_unidecode.py` make the
 tables that romanize song titles for the HUD.

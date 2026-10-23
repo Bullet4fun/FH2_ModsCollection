@@ -1,0 +1,31 @@
+From 0106d922b0694117bfda02446fbeb477971dc0ba Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 20:44:57 +0300
+Subject: [PATCH 6/6] main: ignore a repeated local login of the logged-in user
+
+A Spotify app can repeat its Zeroconf login every few seconds (seen under Wine/Proton). Each one restarted the session and killed the track being downloaded, so every track was skipped.
+---
+ src/main.rs | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/main.rs b/src/main.rs
+index e151a09..1b3805e 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2048,6 +2048,13 @@ async fn main() {
+                 }
+             }, if discovery.is_some() => {
+                 match credentials {
++                    // A Spotify app can repeat its local login every few seconds (seen under
++                    // Wine/Proton). Restarting the session each time killed the track being
++                    // downloaded, so every track was skipped: keep a live session of that user.
++                    Some(credentials) if spirc.is_some() && !connecting && !session.is_invalid()
++                        && credentials.username.as_deref() == Some(session.username().as_str()) => {
++                        debug!("already logged in as {}; local login ignored", session.username());
++                    },
+                     Some(credentials) => {
+                         last_credentials = Some(credentials.clone());
+                         auto_connect_times.clear();
+-- 
+2.42.0.windows.2
+

@@ -12,11 +12,6 @@ typedef struct {
     int needs_write, writable;
 } HostCodeChange;
 
-#ifdef FH2_TWEAKS_TEST
-static int protection_failure = -1;
-static int protection_calls;
-#endif
-
 static const struct {
     AzimuthBuild build;
     uint32_t timestamp, image_size;
@@ -88,12 +83,6 @@ static int prepare_change(unsigned char *base, unsigned image_size, const HostPa
 }
 
 static int make_writable(unsigned char *base, HostCodeChange *change) {
-#ifdef FH2_TWEAKS_TEST
-    if (protection_calls++ == protection_failure) {
-        SetLastError(ERROR_ACCESS_DENIED);
-        return 0;
-    }
-#endif
     if (!VirtualProtect(base + change->set->rva, change->set->size, PAGE_EXECUTE_READWRITE,
                         &change->old_protection)) {
         return 0;
@@ -191,10 +180,3 @@ int azimuth_patch_host_codes(unsigned char *base, const HostPatchSet *sets, unsi
 int azimuth_patch_host_code(unsigned char *base, const HostPatchSet *set) {
     return azimuth_patch_host_codes(base, set, 1);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void Fh2TestAzimuthHostProtectFailure(int index) {
-    protection_failure = index;
-    protection_calls = 0;
-}
-#endif

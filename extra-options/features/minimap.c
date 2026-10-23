@@ -81,9 +81,3 @@ void minimap_prepare_hook(unsigned char *game_image) {
     uintptr_t callback = (uintptr_t)update_minimap;
     memory_copy(callback_pointer, &callback, sizeof(callback));
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestMinimapHookAddress(void) {
-    return (void *)update_minimap;
-}
-#endif

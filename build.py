@@ -55,8 +55,8 @@ DISCORD_SOURCES = ["discord-rpc/discord_mod.c", "discord-rpc/discord_rpc.c", "co
 SPOTIFY_SOURCES = ["spotify-radio/spotify_mod.c", "common/mod_log.c", "spotify-radio/spotify_bridge.c", "spotify-radio/track_controls.c",
                    "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c", "common/support.c"]
 INCLUDE_DIRS = ["common", "sdk", "extra-options", "spotify-radio", "discord-rpc"]
-SPOTIFY_VERSION = "1.1.0"
-DISCORD_VERSION = "1.0.0"
+SPOTIFY_VERSION = "1.2.0"
+DISCORD_VERSION = "1.1.0"
 
 
 def version_resource(compiler, directory, filename, description, product, version):

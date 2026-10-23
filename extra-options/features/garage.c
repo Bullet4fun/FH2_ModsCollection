@@ -469,27 +469,6 @@ static unsigned char frontend_parse_resource_hook(void *game_resource) {
                 *buffer = replacement;
                 *length = plan.length;
                 game_free(original_buffer);
-                log_append(festival        ? "STARTUP: mainland festival placement added to "
-                                             "cold-boot flow.\r\n"
-                           : race_dialogue ? "FRONTEND: blocking IneligibleCar "
-                                             "dialogue skipped in memory.\r\n"
-                           : resource_kind == FRONTEND_RESOURCE_UI_SCREENS
-                               ? "GARAGE: ui_screens.xml car_selected exit patched in "
-                                 "memory.\r\n"
-                               : "GARAGE: pause.xml car reload/resume sequence patched "
-                                 "in memory.\r\n");
-                if (resource_kind == FRONTEND_RESOURCE_PAUSE_FLOW) {
-                    log_append("GARAGE: loading screen and fast-travel arrival animation "
-                               "enabled.\r\n");
-                }
-                if (resource_kind == FRONTEND_RESOURCE_PAUSE_FLOW) {
-                    log_append("GARAGE: transition input locks balanced; loading radio "
-                               "resumed.\r\n");
-                }
-                if (resource_kind == FRONTEND_RESOURCE_PAUSE_FLOW) {
-                    log_append("GARAGE: direct audio handoff; world-streaming and LOD0 waits "
-                               "removed.\r\n");
-                }
             }
         }
     }
@@ -548,30 +527,3 @@ void garage_commit_options(const ModOptions *options) {
 }
 
 void *garage_callback_address(void) { return (void *)frontend_parse_resource_hook; }
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) uint32_t Fh2TestReturnGarageXml(const char *source, uint32_t length,
-                                                      unsigned kind, char *output,
-                                                      uint32_t capacity) {
-    XmlPlan plan;
-    if (!return_garage_plan(source, length, kind, &plan) || !output || capacity <= plan.length) {
-        return 0;
-    }
-    frontend_apply_xml_edits(source, length, &plan, output);
-    return plan.length;
-}
-
-__declspec(dllexport) void *Fh2TestXmlHookAddress(void) {
-    return (void *)frontend_parse_resource_hook;
-}
-
-__declspec(dllexport) uint32_t Fh2TestXmlTransform(const char *input, uint32_t length,
-                                                   unsigned kind, char *output, uint32_t capacity) {
-    XmlPlan plan;
-    if (!frontend_plan_xml_edits(input, length, kind, &plan) || !output ||
-        capacity <= plan.length) {
-        return 0;
-    }
-    frontend_apply_xml_edits(input, length, &plan, output);
-    return plan.length;
-}
-#endif

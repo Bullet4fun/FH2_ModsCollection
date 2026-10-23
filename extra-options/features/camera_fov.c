@@ -77,9 +77,3 @@ void camera_fov_prepare_hooks(unsigned char *game_image) {
     pointer = (uintptr_t)get_fov;
     memory_copy(replacement, &pointer, sizeof(pointer));
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestFovHookAddress(void) {
-    return (void *)get_fov;
-}
-#endif

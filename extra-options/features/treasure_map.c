@@ -41,9 +41,3 @@ void treasure_map_prepare_hook(unsigned char *game_image) {
     uintptr_t callback = (uintptr_t)treasure_map_setup_board;
     memory_copy(callback_pointer, &callback, sizeof(callback));
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestTreasureMapHookAddress(void) {
-    return (void *)treasure_map_setup_board;
-}
-#endif

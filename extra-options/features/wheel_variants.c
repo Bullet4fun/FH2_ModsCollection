@@ -189,10 +189,3 @@ void wheel_variants_prepare_hook(unsigned char *game_image) {
     memory_copy(thunk, jump, sizeof(jump));
     memory_copy(thunk + 2, &callback, 8);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) size_t Fh2TestWheelVariants(const char *sql, size_t size, char *output,
-                                                  size_t capacity) {
-    return expand_query(sql, size, output, capacity);
-}
-#endif

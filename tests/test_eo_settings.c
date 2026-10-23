@@ -29,13 +29,16 @@ int main(void) {
     write_ini(dir, ini);
     ModOptions options;
     CHECK(settings_read(dir, &options), "the supplied INI parses");
-    CHECK(options.drift_camera && options.field_of_view && options.return_to_garage && options.headlights_toggle &&
-              options.roof_toggle && options.turn_signals && options.aero_tuning && options.in_game_options &&
+    CHECK(options.drift_camera && options.field_of_view && options.return_to_garage && options.in_game_options &&
               options.minimap_rotation && options.sun_shadows_option,
-          "every new switch defaults on");
+          "every new switch outside [Vehicle] defaults on");
+    CHECK(!options.headlights_toggle && !options.roof_toggle && !options.turn_signals && !options.aero_tuning,
+          "the supplied INI ships [Vehicle] off");
 
-    write_ini(dir, "[Vehicle]\nRoofToggle=0\n[Graphics]\nSunShadows=0\n[Frontend]\nStartupLocation=0\n");
-    CHECK(settings_read(dir, &options) && !options.roof_toggle && options.headlights_toggle, "[Vehicle] RoofToggle=0");
+    write_ini(dir, "[Vehicle]\nRoofToggle=1\n[Graphics]\nSunShadows=0\n[Frontend]\nStartupLocation=0\n");
+    CHECK(settings_read(dir, &options) && options.roof_toggle && !options.headlights_toggle && !options.turn_signals &&
+              !options.aero_tuning,
+          "[Vehicle] RoofToggle=1; a missing key stays off");
     options.smooth_sun_shadows = 1; // as the in-game menu would set them
     options.skip_car_meet_on_startup = options.spawn_at_festival = 1;
     settings_apply_switches(&options);

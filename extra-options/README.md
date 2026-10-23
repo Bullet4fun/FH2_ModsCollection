@@ -31,6 +31,9 @@ Unzip `FH2_ExtraOptions.zip` into `data\bin\`.
 | Turn signals | hold D-pad left/right for a second |
 | Roof | hold the right stick while standing still |
 
+Headlights, hazards, turn signals, roof and aero tuning are off by default: set them to 1 in the
+`[Vehicle]` section of `mods\FH2_ExtraOptions\FH2_ExtraOptions.ini`.
+
 Some cars have glitched [turn signals](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions/wiki/Turn-Signals)
 or [roofs](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions/wiki/Roofs).
 

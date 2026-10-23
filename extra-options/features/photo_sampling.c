@@ -93,9 +93,3 @@ void photo_sampling_prepare_patch(unsigned char *game_image, const ModOptions *o
 void photo_sampling_commit_options(void) {
     applied_density = selected_density;
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) unsigned Fh2TestPhotoSampleCount(void) {
-    return selected_samples;
-}
-#endif

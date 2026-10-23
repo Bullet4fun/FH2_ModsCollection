@@ -11,11 +11,6 @@ static ForegroundWindow foreground_window;
 static WindowProcess window_process;
 static int input_initialized;
 
-#ifdef FH2_TWEAKS_TEST
-static int use_test_input;
-static KeyboardInput test_input;
-#endif
-
 static int initialize_input(void) {
     if (!input_initialized) {
         input_initialized = 1;
@@ -35,11 +30,6 @@ static int initialize_input(void) {
 }
 
 int autodrive_game_window_focused(void) {
-#ifdef FH2_TWEAKS_TEST
-    if (use_test_input) {
-        return test_input.focused;
-    }
-#endif
     if (!initialize_input()) {
         return 0;
     }
@@ -52,11 +42,6 @@ int autodrive_game_window_focused(void) {
 }
 
 KeyboardInput game_input_read(void) {
-#ifdef FH2_TWEAKS_TEST
-    if (use_test_input) {
-        return test_input;
-    }
-#endif
     KeyboardInput input = {0};
     if (initialize_input()) {
         input.focused = autodrive_game_window_focused();
@@ -65,10 +50,3 @@ KeyboardInput game_input_read(void) {
     }
     return input;
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void Fh2TestAutodriveInput(int f2, int escape, int focus) {
-    use_test_input = 1;
-    test_input = (KeyboardInput){f2, escape, focus};
-}
-#endif

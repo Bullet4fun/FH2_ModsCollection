@@ -321,8 +321,6 @@ void azimuth_repair_missing_markers(unsigned char *host) {
         log_append("AZIMUTH: missing save commit markers rebuilt from actual blob "
                    "sizes and "
                    "SHA-256 hashes.\r\n");
-    } else {
-        log_append("AZIMUTH: no missing save commit markers required repair.\r\n");
     }
     if (marker_failures) {
         log_append("AZIMUTH: some missing markers could not be published; original "
@@ -332,10 +330,3 @@ void azimuth_repair_missing_markers(unsigned char *host) {
 done:
     HeapFree(GetProcessHeap(), 0, scan);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) unsigned Fh2TestAzimuthMarkerRepair(const wchar_t *root) {
-    repair_root(root);
-    return marker_count;
-}
-#endif

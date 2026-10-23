@@ -180,24 +180,3 @@ int path_join(wchar_t *output, const wchar_t *directory, const wchar_t *name) {
     }
     return 1;
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) int Fh2TestMemoryRead(const void *address, void *output, size_t size) {
-    return memory_read(address, output, size);
-}
-
-__declspec(dllexport) uint64_t Fh2TestMemoryBenchmark(const void *address, unsigned count,
-                                                      int process_api) {
-    uint64_t sum = 0, value = 0;
-    for (unsigned index = 0; index < count; ++index) {
-        SIZE_T copied;
-        int read = process_api ? ReadProcessMemory(GetCurrentProcess(), address, &value,
-                                                   sizeof(value), &copied)
-                               : memory_read(address, &value, sizeof(value));
-        if (read) {
-            sum += value;
-        }
-    }
-    return sum;
-}
-#endif

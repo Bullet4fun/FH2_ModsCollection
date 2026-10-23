@@ -31,6 +31,8 @@ static volatile ULONGLONG g_pcm_written = 0; // total frames ever written
 static volatile ULONGLONG g_pcm_read = 0;    // total frames ever read
 static volatile ULONGLONG g_last_pull = 0;   // GetTickCount64 of the last read: is the game listening?
 static volatile ULONGLONG g_last_write = 0;  // GetTickCount64 of the last frames from librespot (underrun reports)
+// Longest pipe-worker FMOD check and ReadFile since the last underrun report: who went quiet, librespot or the worker.
+static volatile ULONGLONG g_worst_fmod_ms = 0, g_worst_read_ms = 0;
 static volatile ULONGLONG g_last_update = 0; // GetTickCount64 of the game's last FMOD update: is its audio thread stalled?
 static ULONGLONG g_start_tick = 0;           // when the pipe reader started: the log's timeline
 
@@ -123,6 +125,9 @@ static int pcm_read(void *data, unsigned int datalen) {
         log_append_value("SPOTIFY report: underrun; frames banked before this feed", (int)fill_before);
         log_append_value("SPOTIFY report:   frames this feed asked for", (int)frames_needed);
         log_append_value("SPOTIFY report:   ms since librespot last delivered", (int)(now - g_last_write));
+        log_append_value("SPOTIFY report:   longest worker FMOD check ms", (int)g_worst_fmod_ms);
+        log_append_value("SPOTIFY report:   longest pipe read ms", (int)g_worst_read_ms);
+        g_worst_fmod_ms = g_worst_read_ms = 0;
     }
     return 0;
 }
@@ -153,8 +158,12 @@ static DWORD WINAPI spotify_pipe_worker(LPVOID param) {
     int was_listening = 0;
     while (g_bridge_running) {
         Sleep(5);
+        ULONGLONG before = GetTickCount64();
         xbox_restart_if_stopped();
         ULONGLONG now = GetTickCount64();
+        if (now - before > g_worst_fmod_ms) {
+            g_worst_fmod_ms = now - before;
+        }
         ULONGLONG due;
         // signed: the feeder may store a tick newer than `now`. Listening while the game plays the channel.
         int listening = (LONGLONG)(now - __atomic_load_n(&g_last_pull, __ATOMIC_RELAXED)) < LISTEN_TIMEOUT_MS;
@@ -183,7 +192,12 @@ static DWORD WINAPI spotify_pipe_worker(LPVOID param) {
                 want = (DWORD)(due - consumed);
             }
             DWORD bytes_read = 0;
-            if (!ReadFile(hPipeRead, s_pipe_temp + carry_len, want, &bytes_read, NULL) || bytes_read == 0) {
+            ULONGLONG read_start = GetTickCount64();
+            int read_ok = ReadFile(hPipeRead, s_pipe_temp + carry_len, want, &bytes_read, NULL);
+            if (GetTickCount64() - read_start > g_worst_read_ms) {
+                g_worst_read_ms = GetTickCount64() - read_start;
+            }
+            if (!read_ok || bytes_read == 0) {
                 break;
             }
             consumed += bytes_read;
@@ -912,10 +926,29 @@ static void ellipsize(char *text, size_t max_chars) {
     memory_copy(text + cut, "...", 4);
 }
 
+// onevent.cmd writes through `cmd /u` (UTF-16LE, no BOM): Wine's cmd has no UTF-8 code page.
+// UTF-8 never holds a zero byte and the UTF-16 text always does (its CRLF), so a zero picks UTF-16.
+static DWORD now_playing_to_utf8(const char *raw, DWORD size, char *text, DWORD capacity) {
+    DWORD zero = 0;
+    while (zero < size && raw[zero]) {
+        ++zero;
+    }
+    if (zero == size) {
+        DWORD n = size < capacity - 1 ? size : capacity - 1;
+        memory_copy(text, raw, n);
+        text[n] = '\0';
+        return n;
+    }
+    int n = WideCharToMultiByte(CP_UTF8, 0, (const wchar_t *)raw, (int)(size / 2), text, (int)capacity - 1, NULL, NULL);
+    text[n > 0 ? n : 0] = '\0';
+    return n > 0 ? (DWORD)n : 0;
+}
+
 // Polled from the startup thread only, hence static buffers (also keeps the frame under the stack-probe limit).
 static void now_playing_poll(void) {
     static wchar_t s_np_path[PATH_CAPACITY];
     static char s_previous[512];
+    static char raw[1024];
     static char text[512];
     static char title[256], artist[256];
     if (!s_np_path[0]) {
@@ -926,12 +959,15 @@ static void now_playing_poll(void) {
         return;
     }
     DWORD size = 0;
-    int ok = ReadFile(file, text, sizeof(text) - 1, &size, NULL);
+    int ok = ReadFile(file, raw, sizeof(raw), &size, NULL);
     CloseHandle(file);
     if (!ok || size == 0) {
         return;
     }
-    text[size] = '\0';
+    size = now_playing_to_utf8(raw, size, text, sizeof(text));
+    if (size == 0) {
+        return;
+    }
     if (memory_equal(text, s_previous, size + 1)) {
         return;
     }

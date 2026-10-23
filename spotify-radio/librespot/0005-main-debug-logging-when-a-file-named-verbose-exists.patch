@@ -1,0 +1,31 @@
+From 2775a3f8c65d0ea0a1fb8f2a0e66f129d1e6342f Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 20:06:25 +0300
+Subject: [PATCH 5/6] main: debug logging when a file named verbose exists
+
+Lets a user turn on the detailed log without changing how the game mod starts librespot.
+---
+ src/main.rs | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/main.rs b/src/main.rs
+index d2e81a9..e151a09 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -747,7 +747,12 @@ async fn get_setup() -> Setup {
+         exit(0);
+     }
+ 
+-    setup_logging(opt_present(QUIET), opt_present(VERBOSE));
++    // A file named "verbose" in the working directory (the game mod's folder) turns on debug logging
++    // without changing the command line the mod starts librespot with.
++    setup_logging(
++        opt_present(QUIET),
++        opt_present(VERBOSE) || std::path::Path::new("verbose").exists(),
++    );
+ 
+     info!("{}", get_version_string());
+ 
+-- 
+2.42.0.windows.2
+

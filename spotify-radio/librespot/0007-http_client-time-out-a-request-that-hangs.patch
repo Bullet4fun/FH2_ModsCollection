@@ -1,0 +1,47 @@
+From 2d84c07e099d059c08b32bd6a2fa0c306b82a382 Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 21:03:45 +0300
+Subject: [PATCH] http_client: time out a request that hangs
+
+Under Wine/Proton the connect-state PUT could hang forever; Spirc waited on it, never answered the app's transfer command, and the dealer connection was dropped. Each try gets 10 s; the third timeout is an error.
+---
+ core/src/http_client.rs | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/core/src/http_client.rs b/core/src/http_client.rs
+index bbd6383..3f5f3d8 100644
+--- a/core/src/http_client.rs
++++ b/core/src/http_client.rs
+@@ -185,6 +185,7 @@ impl HttpClient {
+         // As correct as that may be technically, we now need all this boilerplate to clone it
+         // ourselves, as any `Request` is moved in the loop.
+         let (parts, body_as_bytes) = req.into_parts();
++        let mut timeouts = 0;
+ 
+         loop {
+             let mut req = Request::builder()
+@@ -194,8 +195,20 @@ impl HttpClient {
+                 .body(body_as_bytes.clone())?;
+             *req.headers_mut() = parts.headers.clone();
+ 
++            // Under Wine/Proton a request can hang without ever failing, which stalled the whole
++            // Connect state machine: give it 10 s, send it again, and fail after the third try.
+             let request = self.request_fut(req)?;
+-            let response = request.await;
++            let response = match tokio::time::timeout(Duration::from_secs(10), request).await {
++                Ok(response) => response,
++                Err(e) => {
++                    timeouts += 1;
++                    if timeouts < 3 {
++                        warn!("Request to {} timed out, retrying", parts.uri);
++                        continue;
++                    }
++                    return Err(Error::deadline_exceeded(e));
++                }
++            };
+ 
+             if let Ok(response) = &response {
+                 let code = response.status();
+-- 
+2.42.0.windows.2
+

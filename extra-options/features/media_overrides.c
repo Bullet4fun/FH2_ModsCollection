@@ -75,10 +75,9 @@ static void ensure_folders_mounted(void *filesystem) {
     void **methods = *(void ***)filesystem;
     ((SortVolumes)methods[0x1f8 / 8])(filesystem);
     InterlockedExchange(&mount_state, 2);
-    log_append(override && pc ? "FILES: mediaoverride > mediapc > original "
-                                "assets; native folder mounts ready.\r\n"
-                              : "FILES: an override mount failed; original asset "
-                                "lookup remains available.\r\n");
+    if (!override || !pc) {
+        log_append("FILES: an override mount failed; original asset lookup remains available.\r\n");
+    }
 }
 
 static unsigned char resolve_file(void *filesystem, void **volume, void *relative_path,
@@ -116,13 +115,3 @@ void media_overrides_prepare_hook(unsigned char *game_image) {
     memory_copy(original_pointer, &original, sizeof(original));
     memory_copy(callback_pointer, &callback, sizeof(callback));
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestMediaOverridesHookAddress(void) {
-    return (void *)resolve_file;
-}
-
-__declspec(dllexport) void Fh2TestMediaOverridesReset(void) {
-    InterlockedExchange(&mount_state, 0);
-}
-#endif

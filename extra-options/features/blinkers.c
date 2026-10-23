@@ -260,7 +260,3 @@ static unsigned char photo_hold_ready(void *owner) {
     }
     return ((unsigned char (*)(void *))(image + 0x963480))(owner);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) unsigned Fh2TestBlinkerSide(void) { return state.active; }
-#endif

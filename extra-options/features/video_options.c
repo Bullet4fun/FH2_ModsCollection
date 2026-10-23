@@ -310,9 +310,6 @@ static int register_properties(unsigned page) {
     }
     initialized_image = image;
     registered_image[page] = image;
-    log_append(page == HUD_PAGE ? "HUD: drift, FOV and extra controls added to the native HUD "
-                                  "menu.\r\n"
-                                : "VIDEO: graphics controls added to the native Video menu.\r\n");
     return 1;
 }
 
@@ -429,28 +426,3 @@ void video_options_prepare_hooks(unsigned char *game_image) {
     callback = (uintptr_t)reset_hud_options;
     memory_copy(hud_reset_callback, &callback, 8);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) const wchar_t *Fh2TestSettingChoice(unsigned collection, unsigned index) {
-    return collection < ARRAY_COUNT(choice_counts) && index < choice_counts[collection]
-               ? choice_text(collection, index)
-               : NULL;
-}
-
-__declspec(dllexport) void *Fh2TestVideoResourceHookAddress(void) {
-    return (void *)get_resource;
-}
-
-__declspec(dllexport) size_t Fh2TestVideoXaml(const char *text, size_t length, char *out,
-                                              size_t capacity) {
-    return video_options_extend_xaml(image, text, length, out, capacity);
-}
-
-__declspec(dllexport) void *Fh2TestVideoProperty(unsigned index) {
-    return index < ARRAY_COUNT(properties) && property_names[index] ? &properties[index] : NULL;
-}
-
-__declspec(dllexport) const wchar_t *Fh2TestVideoChoiceText(unsigned index) {
-    return index < 3 ? choice_text(0, index) : NULL;
-}
-#endif

@@ -47,22 +47,12 @@ void gamerpic_set_directory(const wchar_t *directory) {
     }
 }
 
-typedef BOOL(WINAPI *PictureFileReader)(HANDLE, void *, DWORD, DWORD *, OVERLAPPED *);
-#ifdef FH2_TWEAKS_TEST
-static PictureFileReader test_reader;
-#endif
-
 static int read_picture_file(HANDLE file, unsigned char *bytes, DWORD size, DWORD *loaded,
                              DWORD *error) {
     *loaded = *error = 0;
     while (*loaded < size) {
         DWORD count = 0;
-#ifdef FH2_TWEAKS_TEST
-        PictureFileReader reader = test_reader ? test_reader : ReadFile;
-#else
-        PictureFileReader reader = ReadFile;
-#endif
-        if (!reader(file, bytes + *loaded, size - *loaded, &count, NULL)) {
+        if (!ReadFile(file, bytes + *loaded, size - *loaded, &count, NULL)) {
             *error = GetLastError();
             return 0;
         }
@@ -216,8 +206,7 @@ static void *gamerpic_load_cached_image(void) {
                      "original picture.\r\n";
         goto done;
     }
-    diagnostic = "GAMERPIC: local Gamerpic.png decoded and submitted through the "
-                 "native texture loader.\r\n";
+    diagnostic = NULL; // loaded: nothing to report
 done:
     if (file != INVALID_HANDLE_VALUE) {
         CloseHandle(file);
@@ -231,7 +220,9 @@ done:
     gamerpic_release_reference(bitmap);
     gamerpic_image = image;
     InterlockedExchange(&gamerpic_state, image ? GAMERPIC_READY : GAMERPIC_UNAVAILABLE);
-    log_append(diagnostic);
+    if (diagnostic) {
+        log_append(diagnostic);
+    }
     if (!image && (file_error || expected_bytes)) {
         log_append_value("GAMERPIC: Win32 file error=", (int)file_error);
         log_append_value("GAMERPIC: expected file bytes=", (int)expected_bytes);
@@ -287,39 +278,3 @@ void gamerpic_prepare_hook(unsigned char *game_image) {
     gamerpic_queue_bitmap_update = (GamerpicUpdateFn)(game_image + GAME_RVA_QUEUE_BITMAP_UPDATE);
     gamerpic_destroy_object = (GamerpicDestroyFn)(game_image + GAME_RVA_DESTROY_UI_OBJECT);
 }
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void Fh2TestGamerpicLogDirectory(const wchar_t *directory) {
-    log_set_directory(directory);
-}
-
-__declspec(dllexport) void Fh2TestGamerpicReader(PictureFileReader reader) {
-    test_reader = reader;
-}
-
-__declspec(dllexport) void *Fh2TestGamerpicHookAddress(void) {
-    return (void *)gamerpic_convert_hook;
-}
-
-__declspec(dllexport) void Fh2TestGamerpicDirectory(const wchar_t *dir) {
-    gamerpic_set_directory(dir);
-}
-
-__declspec(dllexport) const wchar_t *Fh2TestGamerpicPath(void) {
-    return gamerpic_path;
-}
-
-__declspec(dllexport) int Fh2TestValidatePng(const unsigned char *bytes, uint32_t size) {
-    return image_validate_png(bytes, size);
-}
-
-__declspec(dllexport) void Fh2TestSetGamerpicPath(const wchar_t *path) {
-    unsigned i = 0;
-    while (path[i] && i < 32767) {
-        gamerpic_path[i] = path[i];
-        ++i;
-    }
-    gamerpic_path[i] = 0;
-    gamerpic_image = 0;
-    gamerpic_state = GAMERPIC_NOT_LOADED;
-}
-#endif

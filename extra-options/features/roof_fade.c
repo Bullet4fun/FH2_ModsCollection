@@ -54,9 +54,3 @@ void roof_fade_prepare_hook(unsigned char *image) {
                                              accepted_callbacks,
                                              ARRAY_COUNT(accepted_callbacks)};
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestVehicleFadeHookAddress(void) {
-    return (void *)roof_fade_color;
-}
-#endif

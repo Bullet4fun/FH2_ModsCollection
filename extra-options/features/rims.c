@@ -418,14 +418,3 @@ void rims_prepare_hook(unsigned char *image) {
     uintptr_t callback = (uintptr_t)load_rim_query;
     memory_copy(callback_pointer, &callback, sizeof(callback));
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestRimNameGetter(void) { return selected_stock_rim_name; }
-
-__declspec(dllexport) void *Fh2TestRimsHookAddress(void) { return (void *)load_rim_query; }
-
-__declspec(dllexport) size_t Fh2TestRimsQuery(const char *query, char *output, size_t capacity) {
-    QueryPlan edit;
-    return plan_query(query, &edit) ? edit_query(query, &edit, output, capacity) : 0;
-}
-#endif

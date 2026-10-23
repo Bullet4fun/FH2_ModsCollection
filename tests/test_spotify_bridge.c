@@ -29,6 +29,16 @@ static void *std_string(const char *text) {
 }
 
 int main(void) {
+    /* nowplaying.txt: UTF-16LE from `cmd /u` (Wine and Windows) becomes UTF-8; plain UTF-8 passes through. */
+    {
+        static const char utf16[] = "\x1f\x04\x48\x04\r\0\n\0A\0\r\0\n\0"; /* "Пш\r\nA\r\n" */
+        char out[64];
+        DWORD n = now_playing_to_utf8(utf16, sizeof(utf16) - 1, out, sizeof(out));
+        CHECK(n == 9 &&strcmp(out, "\xd0\x9f\xd1\x88\r\nA\r\n") == 0, "nowplaying: UTF-16LE is converted to UTF-8");
+        n = now_playing_to_utf8("\xd0\x9f\r\nB", 5, out, sizeof(out));
+        CHECK(n == 5 && strcmp(out, "\xd0\x9f\r\nB") == 0, "nowplaying: UTF-8 is kept as is");
+    }
+
     /* The stream's read callback fills from the ring and names the stream for the playSound hook. */
     static PcmFrame got[2048];
     g_pcm_written = PCM_TARGET_FRAMES;

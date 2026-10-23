@@ -14,6 +14,7 @@ TESTS = [  # (source, extra sources)
     ("tests/test_spotify_mod.c", SPOTIFY + ["common/mod_log.c"]),
     ("tests/test_track_controls.c", ["common/support.c", "common/mod_log.c"]),
     ("tests/test_eo_settings.c", ["common/support.c"]),
+    ("tests/test_discord_rpc.c", ["common/support.c"]),
 ]
 
 
@@ -24,7 +25,7 @@ def main():
         for source, extra in TESTS:
             name = Path(source).stem
             exe = Path(tmp) / (name + ".exe")
-            build = [str(zig), "cc", *(a for d in ("common", "sdk", "spotify-radio", "extra-options") for a in ("-I", str(ROOT / d))), "-DFH2_AZIMUTH=1", "-Wall", "-Wextra", "-Wno-unused-result", "-fms-extensions",
+            build = [str(zig), "cc", *(a for d in ("common", "sdk", "spotify-radio", "extra-options", "discord-rpc") for a in ("-I", str(ROOT / d))), "-DFH2_AZIMUTH=1", "-Wall", "-Wextra", "-Wno-unused-result", "-fms-extensions",
                      str(ROOT / source), *(str(ROOT / s) for s in extra), "-o", str(exe)]
             subprocess.run(build, check=True)
             result = subprocess.run([str(exe)], capture_output=True, text=True, cwd=ROOT)

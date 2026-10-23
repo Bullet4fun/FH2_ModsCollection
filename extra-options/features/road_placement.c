@@ -193,7 +193,6 @@ static void road_store_hook(void *self) {
     if (!__atomic_load_n(&road_enabled, __ATOMIC_RELAXED) || !road_is_garage_swap(self)) {
         return;
     }
-    log_append("GARAGE: native position stored; calculating nearest road.\r\n");
     void *game, *player;
     unsigned char *car = 0;
     void *vtable;
@@ -210,10 +209,9 @@ static void road_store_hook(void *self) {
             ((RoadReleaseFn)release)(car);
         }
     }
-    log_append(changed ? "GARAGE: nearest-road position and heading stored for "
-                         "loading-screen placement.\r\n"
-                       : "GARAGE: nearest-road data unavailable; keeping "
-                         "original car position.\r\n");
+    if (!changed) {
+        log_append("GARAGE: nearest-road data unavailable; keeping original car position.\r\n");
+    }
 }
 
 static const unsigned char *const road_hook_accepted[] = {road_original_pointer,
@@ -242,9 +240,3 @@ void road_prepare_hook(unsigned char *game_image) {
     component_get_state_cache = (RoadCacheFn)(game_image + GAME_RVA_GET_STATE_CACHE);
     car_query_nearest_road = (RoadQueryFn)(game_image + GAME_RVA_NEAREST_ROAD);
 }
-
-#ifdef FH2_TWEAKS_TEST
-__declspec(dllexport) void *Fh2TestRoadHookAddress(void) {
-    return (void *)road_store_hook;
-}
-#endif

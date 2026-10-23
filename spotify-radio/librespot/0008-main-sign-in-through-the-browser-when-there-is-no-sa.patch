@@ -1,4 +1,4 @@
-From 6d3ff57a14575fbd3c83552327111bb178c43a8e Mon Sep 17 00:00:00 2001
+From c2b4b3653880c0b43f6cbb664849ceaf72d81700 Mon Sep 17 00:00:00 2001
 From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
 Date: Thu, 22 Oct 2026 21:28:35 +0300
 Subject: [PATCH] main: sign in through the browser when there is no saved
@@ -10,10 +10,10 @@ Finding the device on the local network fails while the Spotify desktop app hold
  1 file changed, 4 insertions(+)
 
 diff --git a/src/main.rs b/src/main.rs
-index d2e81a9..c6bb2b1 100644
+index 1b3805e..4791829 100644
 --- a/src/main.rs
 +++ b/src/main.rs
-@@ -1232,6 +1232,10 @@ async fn get_setup() -> Setup {
+@@ -1237,6 +1237,10 @@ async fn get_setup() -> Setup {
          }
      };
  
