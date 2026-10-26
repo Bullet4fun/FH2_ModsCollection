@@ -46,6 +46,20 @@ int main(void) {
     CHECK(track_controls_step(0, keys, 4000) == TRACK_NEXT && track_controls_step(0, keys, 4015) == TRACK_NONE,
           "a key fires once per press");
 
+    /* The INI: "Key = value   // note" (the default file), the old "Key=value" and ';' notes. */
+    memory_copy(ini_text, default_ini, sizeof(default_ini));
+    parse_ini();
+    CHECK(track_bindings[TRACK_NEXT][0].buttons == 0x40 && track_bindings[TRACK_PREVIOUS][0].taps == 2 &&
+              !track_bindings[TRACK_PLAY_PAUSE][0].buttons && track_bindings[TRACK_NEXT][1].key == 0x75 &&
+              double_tap_ms == 200,
+          "default INI: padded values with // notes");
+    static const char edited[] = "[Controls] // x\r\nNextTrack=RB ; old note\r\nPlayPauseKey =\tF8\t// y\r\nDoubleTapTime = 300 // z\r\n";
+    memory_copy(ini_text, edited, sizeof(edited));
+    parse_ini();
+    CHECK(track_bindings[TRACK_NEXT][0].buttons == 0x200 && track_bindings[TRACK_PLAY_PAUSE][1].key == 0x77 &&
+              double_tap_ms == 300,
+          "edited INI: old and new note styles");
+
     printf(fails ? "%d FAILED\n" : "all passed\n", fails);
     return fails != 0;
 }

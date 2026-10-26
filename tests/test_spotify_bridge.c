@@ -44,6 +44,18 @@ int main(void) {
     g_pcm_written = PCM_TARGET_FRAMES;
     CHECK(xbox_stream_read_hook((void *)1, got, sizeof(got)) == 0 && g_xbox_sound == (void *)1 && g_pcm_read == 2048,
           "stream read: the ring is read, the stream remembered as the Xbox Music sound");
+    /* A recreated stream (timeline rewind) starts where the old channel stopped playing. */
+    g_xbox_channel = g_played_channel = (void *)7;
+    g_played_frames = 1024;
+    CHECK(xbox_stream_read_hook((void *)2, got, sizeof(got)) == 0 && g_pcm_read == 2048 - 1024 + 2048 &&
+              g_stream_frames == 2048 && g_xbox_channel == NULL,
+          "stream recreated: the frames read ahead but never played are read again");
+    /* FMOD may give the new stream the old one's address: the destroy callback marks it. */
+    g_xbox_channel = g_played_channel = (void *)8;
+    g_played_frames = 1024;
+    g_stream_replaced = 1;
+    CHECK(xbox_stream_read_hook((void *)2, got, sizeof(got)) == 0 && g_pcm_read == 3072 - 1024 + 2048 && !g_stream_replaced,
+          "stream recreated at the same address: still read again");
 
     /* The station lock: only "Xbox Music" is forced open; story-locked stations keep the game's answer. */
     g_orig_station_locked = fake_station_locked;
@@ -72,6 +84,22 @@ int main(void) {
     CHECK(param_values[1] == 6.0f && param_values[2] == 3.0f && param_values[3] == 8.0f,
           "snapshot copy: Xbox Music's RADIO_Station becomes a stock station, nothing else changes");
 
+    /* nowplaying.txt: the new track goes into the spare buffer, and the HUD sees it only after the flip. */
+    {
+        GetTempPathW(PATH_CAPACITY, s_work_dir);
+        wchar_t file[PATH_CAPACITY];
+        path_join(file, s_work_dir, L"nowplaying.txt");
+        HANDLE h = CreateFileW(file, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+        DWORD w;
+        WriteFile(h, "Song\r\nArtist\r\n", 14, &w, NULL);
+        CloseHandle(h);
+        LONG before = g_np_shown;
+        now_playing_poll();
+        DeleteFileW(file);
+        CHECK(g_np_shown != before && strcmp(g_np[g_np_shown].title, "Song") == 0 && strcmp(g_np[g_np_shown].artist, "Artist") == 0,
+              "nowplaying: the new track is shown from the other buffer");
+        CHECK(strcmp(g_np[before].title, "Spotify Radio") == 0, "nowplaying: the shown buffer is not written in place");
+    }
     printf(fails ? "%d FAILED\n" : "all passed\n", fails);
     return fails != 0;
 }

@@ -14,14 +14,9 @@ static int input_initialized;
 static int initialize_input(void) {
     if (!input_initialized) {
         input_initialized = 1;
-        HMODULE module = LoadLibraryExW(L"user32.dll", 0, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if (module) {
-            key_state = (KeyState)(uintptr_t)GetProcAddress(module, "GetAsyncKeyState");
-            foreground_window =
-                (ForegroundWindow)(uintptr_t)GetProcAddress(module, "GetForegroundWindow");
-            window_process =
-                (WindowProcess)(uintptr_t)GetProcAddress(module, "GetWindowThreadProcessId");
-        }
+        key_state = GetAsyncKeyState;
+        foreground_window = GetForegroundWindow;
+        window_process = GetWindowThreadProcessId;
         if (!key_state || !foreground_window || !window_process) {
             log_append("AUTODRIVE: keyboard API unavailable; F2 is inactive.\r\n");
         }

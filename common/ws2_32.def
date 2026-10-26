@@ -1,0 +1,6 @@
+LIBRARY ws2_32.dll
+EXPORTS
+    WSAStartup
+    WSASocketW
+    connect
+    closesocket

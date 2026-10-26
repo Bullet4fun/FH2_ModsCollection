@@ -30,11 +30,8 @@ static PcmFrame g_pcm_buffer[PCM_BUFFER_FRAMES];
 static volatile ULONGLONG g_pcm_written = 0; // total frames ever written
 static volatile ULONGLONG g_pcm_read = 0;    // total frames ever read
 static volatile ULONGLONG g_last_pull = 0;   // GetTickCount64 of the last read: is the game listening?
-static volatile ULONGLONG g_last_write = 0;  // GetTickCount64 of the last frames from librespot (underrun reports)
-// Longest pipe-worker FMOD check and ReadFile since the last underrun report: who went quiet, librespot or the worker.
-static volatile ULONGLONG g_worst_fmod_ms = 0, g_worst_read_ms = 0;
+static volatile ULONGLONG g_last_write = 0;  // GetTickCount64 of the last frames from librespot (gap reports)
 static volatile ULONGLONG g_last_update = 0; // GetTickCount64 of the game's last FMOD update: is its audio thread stalled?
-static ULONGLONG g_start_tick = 0;           // when the pipe reader started: the log's timeline
 
 static HANDLE g_spotify_process = NULL;
 static HANDLE g_spotify_job = NULL;
@@ -70,18 +67,12 @@ static int pcm_read(void *data, unsigned int datalen) {
     static int s_fade_len = PCM_FADE_IN_FRAMES; // length of the current or next fade-in
     static PcmFrame s_tail;     // last frame written; through silence it decays to 0 instead of cutting (a click)
     static PcmFrame s_from;     // where a fade-in starts, so it never steps
-    static ULONGLONG s_last_call = 0;
     ULONGLONG now = GetTickCount64();
     __atomic_store_n(&g_last_pull, now, __ATOMIC_RELAXED);
-    ULONGLONG gap = now - s_last_call; // time since the previous feed
-    s_last_call = now;
     ULONGLONG written = __atomic_load_n(&g_pcm_written, __ATOMIC_ACQUIRE); // frames below it are complete
     ULONGLONG read = g_pcm_read;
     if (written - read > PCM_MAX_FRAMES) {
-        // Back after the game stopped listening: catch up to live (logged: station-switch timeline),
-        // keeping the margin banked.
-        log_append_value("SPOTIFY: resumed live after gap ms", (int)gap);
-        log_append_value("SPOTIFY: frames behind live at resume", (int)(written - read));
+        // Back after the game stopped listening: catch up to live, keeping the margin banked.
         read = written - PCM_TARGET_FRAMES;
         s_buffering = 0;
         s_fade_in = s_fade_len = PCM_ENTER_FADE_FRAMES;
@@ -91,7 +82,6 @@ static int pcm_read(void *data, unsigned int datalen) {
         s_buffering = 0; // start-up or after an underrun: silence until the margin is banked again
     }
     static int s_underrun_reports = 0; // per session, so a bad run cannot flood the log
-    ULONGLONG fill_before = written - read;
     int underran = 0;
     for (unsigned int f = 0; f < frames_needed; ++f) {
         if (!s_buffering && read < written) {
@@ -120,14 +110,9 @@ static int pcm_read(void *data, unsigned int datalen) {
         }
     }
     __atomic_store_n(&g_pcm_read, read, __ATOMIC_RELEASE);
-    if (underran && s_underrun_reports < 200) { // what drained it: librespot going quiet
+    if (underran && s_underrun_reports < 20) {
         ++s_underrun_reports;
-        log_append_value("SPOTIFY report: underrun; frames banked before this feed", (int)fill_before);
-        log_append_value("SPOTIFY report:   frames this feed asked for", (int)frames_needed);
-        log_append_value("SPOTIFY report:   ms since librespot last delivered", (int)(now - g_last_write));
-        log_append_value("SPOTIFY report:   longest worker FMOD check ms", (int)g_worst_fmod_ms);
-        log_append_value("SPOTIFY report:   longest pipe read ms", (int)g_worst_read_ms);
-        g_worst_fmod_ms = g_worst_read_ms = 0;
+        log_append_value("SPOTIFY: audio gap; ms since librespot last sent audio ", (int)(now - g_last_write));
     }
     return 0;
 }
@@ -151,28 +136,16 @@ static DWORD WINAPI spotify_pipe_worker(LPVOID param) {
     static unsigned char s_pipe_temp[4096];
     const ULONGLONG bytes_per_sec = 44100 * sizeof(PcmFrame);
     size_t carry_len = 0;
-    const ULONGLONG start_tick = g_start_tick = GetTickCount64();
-    ULONGLONG clock_start = start_tick;
+    ULONGLONG clock_start = GetTickCount64();
     ULONGLONG clock_base = 0; // consumed when the game last stopped listening
     ULONGLONG consumed = 0;   // bytes taken from librespot since start
-    int was_listening = 0;
     while (g_bridge_running) {
         Sleep(5);
-        ULONGLONG before = GetTickCount64();
         xbox_restart_if_stopped();
         ULONGLONG now = GetTickCount64();
-        if (now - before > g_worst_fmod_ms) {
-            g_worst_fmod_ms = now - before;
-        }
         ULONGLONG due;
         // signed: the feeder may store a tick newer than `now`. Listening while the game plays the channel.
         int listening = (LONGLONG)(now - __atomic_load_n(&g_last_pull, __ATOMIC_RELAXED)) < LISTEN_TIMEOUT_MS;
-        if (listening != was_listening) { // timeline for "the radio went quiet" reports
-            was_listening = listening;
-            log_append_value(listening ? "SPOTIFY: game pulling Spotify again, s since start"
-                                       : "SPOTIFY: game stopped pulling Spotify, s since start",
-                             (int)((now - start_tick) / 1000));
-        }
         if (listening) {
             // signed for the same reason; capped below the listen timeout
             LONGLONG stalled = (LONGLONG)(now - __atomic_load_n(&g_last_update, __ATOMIC_RELAXED));
@@ -192,12 +165,7 @@ static DWORD WINAPI spotify_pipe_worker(LPVOID param) {
                 want = (DWORD)(due - consumed);
             }
             DWORD bytes_read = 0;
-            ULONGLONG read_start = GetTickCount64();
-            int read_ok = ReadFile(hPipeRead, s_pipe_temp + carry_len, want, &bytes_read, NULL);
-            if (GetTickCount64() - read_start > g_worst_read_ms) {
-                g_worst_read_ms = GetTickCount64() - read_start;
-            }
-            if (!read_ok || bytes_read == 0) {
+            if (!ReadFile(hPipeRead, s_pipe_temp + carry_len, want, &bytes_read, NULL) || bytes_read == 0) {
                 break;
             }
             consumed += bytes_read;
@@ -224,12 +192,47 @@ static DWORD WINAPI spotify_pipe_worker(LPVOID param) {
     return 0;
 }
 
-/* System::update, on the game's FMOD thread: only marks that its audio thread runs (a stall lets
-   the pipe worker bank what the stream plays down meanwhile). */
+static void *volatile g_xbox_sound = NULL; // the Xbox Music stream (named by its read callback, which FMOD calls on creation)
+static void *volatile g_xbox_channel = NULL; // the channel playing it
+// Studio recreates the stream on every timeline rewind; the old one dies with audio it read ahead but
+// never played. Frames read by the current stream and the last played position of its channel let
+// the next stream start where the old one went silent instead of skipping that audio.
+static int (*g_get_position)(void *channel, unsigned int *position, unsigned int unit) = NULL; // Channel::getPosition
+static volatile ULONGLONG g_stream_frames = 0;
+static volatile unsigned int g_played_frames = 0;
+static void *volatile g_played_channel = NULL; // channel g_played_frames belongs to
+#define FMOD_TIMEUNIT_PCM 2
+static volatile int g_stream_replaced = 0; // the event destroyed its stream (callback 4)
+
+/* System::update, on the game's FMOD thread: marks that its audio thread runs (a stall lets the pipe
+   worker bank what the stream plays down meanwhile) and samples the stream's played position. */
 static int fmod_update_hook(void *system) {
     int result = g_orig_update(system);
     __atomic_store_n(&g_last_update, GetTickCount64(), __ATOMIC_RELAXED);
+    void *channel = g_xbox_channel;
+    unsigned int position = 0;
+    if (channel && g_get_position && g_get_position(channel, &position, FMOD_TIMEUNIT_PCM) == 0) {
+        g_played_frames = position;
+        g_played_channel = channel;
+    }
     return result;
+}
+
+/* A new stream replaces the old: hand it the frames the old one read but never played, if the ring
+   still holds them. Returns the frames given back. Under feed_lock. */
+static unsigned int xbox_replay_unplayed(void) {
+    ULONGLONG unplayed = 0;
+    if (g_xbox_channel && g_played_channel == g_xbox_channel && g_played_frames <= g_stream_frames) {
+        unplayed = g_stream_frames - g_played_frames;
+    }
+    g_xbox_channel = NULL; // the old channel died with its stream
+    g_stream_frames = 0;
+    ULONGLONG read = g_pcm_read;
+    if (unplayed > 44100 || unplayed > read || g_pcm_written - (read - unplayed) > PCM_MAX_FRAMES) {
+        return 0; // stale (a long stop): pcm_read catches up to live anyway
+    }
+    __atomic_store_n(&g_pcm_read, read - unplayed, __ATOMIC_RELEASE);
+    return (unsigned int)unplayed;
 }
 
 // FMOD lookups for the radio bus route (exe exports; tests set fakes)
@@ -239,8 +242,6 @@ static int (*g_set_volume)(void *control, float volume) = NULL;    // ChannelCon
 static int (*g_get_dsp)(void *control, int index, void **dsp) = NULL;
 static int (*g_get_num_dsps)(void *control, int *count) = NULL;
 static int (*g_dsp_get_info)(void *dsp, char *name, unsigned int *version, int *channels, int *width, int *height) = NULL;
-static void *volatile g_xbox_sound = NULL; // the Xbox Music stream (named by its read callback, which FMOD calls on creation)
-static void *volatile g_xbox_channel = NULL; // the channel playing it
 static int (*g_orig_set_position)(void *channel, unsigned int position, unsigned int unit) = NULL;
 
 /* Channel::setPosition: Studio seeks a programmer sound when its event's timeline moves. Spotify
@@ -307,14 +308,13 @@ static void xbox_route_through_radio_bus(void *channel) {
             }
         }
         if (bus) {
-            int moved = bus == parent ? 0 : add_group(bus, group, 1, NULL);
-            int bypassed = dsp_named(group, "FMOD Send", &send) ? set_bypass(send, 1) : -1;
-            g_set_volume(group, 1.0f);
-            static int s_reports = 0;
-            if (s_reports++ < 10) {
-                log_append_value(bus == parent ? "SPOTIFY: Xbox Music already on the radio bus; send bypass result"
-                                               : "SPOTIFY: Xbox Music moved onto the radio bus; result", bus == parent ? bypassed : moved);
+            if (bus != parent) {
+                add_group(bus, group, 1, NULL);
             }
+            if (dsp_named(group, "FMOD Send", &send)) {
+                set_bypass(send, 1);
+            }
+            g_set_volume(group, 1.0f);
             return;
         }
         group = parent;
@@ -354,35 +354,10 @@ static int xbox_music_available_hook(void *radio_system) {
     return 1;
 }
 
-/* Diagnostics: the station the game selects, by name (an MSVC std::string: inline under 16 chars). */
-static void (*g_orig_set_radio_station)(void *radio_system, void *name) = NULL;
-static void set_radio_station_hook(void *radio_system, void *name) {
-    static int s_reports = 0;
-    unsigned long long size = 0, capacity = 0;
-    const char *text = NULL;
-    if (name && s_reports < 200 && memory_read((unsigned char *)name + 0x10, &size, sizeof(size)) &&
-        memory_read((unsigned char *)name + 0x18, &capacity, sizeof(capacity)) && size < 64) {
-        text = capacity > 15 ? *(const char **)name : (const char *)name;
-        static const char prefix[] = "SPOTIFY: game selects radio station: ";
-        char line[sizeof(prefix) + 64 + 2];
-        size_t n = sizeof(prefix) - 1;
-        memory_copy(line, prefix, n);
-        for (unsigned long long i = 0; i < size; ++i) {
-            line[n++] = text[i] >= 0x20 && text[i] < 0x7f ? text[i] : '?';
-        }
-        line[n++] = '\r';
-        line[n++] = '\n';
-        line[n] = 0;
-        ++s_reports;
-        log_append(line);
-    }
-    g_orig_set_radio_station(radio_system, name);
-}
-
 /* The profile's station lock (0xa65df0, "is it locked?": true when the name is not in the profile's
    unlocked list at +0x78, seen live; it takes the std::string by value and frees it). The stock game
    unlocks "Xbox Music" only from the Xbox Music intro popup, which needs the dead service: here it is
-   never locked. Other names keep the game's answer; each new name checked is logged once. */
+   never locked. Other names keep the game's answer. */
 static int (*g_orig_station_locked)(void *profile, void *name) = NULL;
 static int station_name_is(void *name, const char *text, unsigned long long length) {
     unsigned long long size = 0, capacity = 0;
@@ -419,24 +394,8 @@ static void snapshot_copy_hook(unsigned char *manager) {
 }
 
 static int station_locked_hook(void *profile, void *name) {
-    static const char *const known[] = {"Horizon Pulse", "Bass Arena", "Horizon XS", "Radio Levante", "Hospital Records",
-                                        "Ninja Tune", "Innovative Leisure", "StationOff", "Xbox Music"};
-    static unsigned int s_logged = 0; // one bit per known name, bit 9: an unknown one
-    int xbox = station_name_is(name, "Xbox Music", 10);
-    unsigned int bit = 1u << 9;
-    for (unsigned int i = 0; i < sizeof(known) / sizeof(known[0]); ++i) {
-        if (station_name_is(name, known[i], text_length(known[i]))) {
-            bit = 1u << i;
-        }
-    }
-    int locked = g_orig_station_locked(profile, name); // frees name
-    if (!(s_logged & bit)) {
-        s_logged |= bit;
-        log_append_value(bit == 1u << 8 ? "SPOTIFY: game checks whether Xbox Music is locked; stock answer"
-                         : bit == 1u << 9 ? "SPOTIFY: game checks whether an unknown station is locked; answer"
-                                          : "SPOTIFY: game checks whether a stock station is locked; answer",
-                         locked);
-    }
+    int xbox = station_name_is(name, "Xbox Music", 10); // before the call: it frees name
+    int locked = g_orig_station_locked(profile, name);
     return xbox ? 0 : locked;
 }
 
@@ -450,26 +409,6 @@ static int station_locked_hook(void *profile, void *name) {
 #define XBOX_STREAM_VTABLE 0x2e76190
 static void (*g_orig_xbox_command)(unsigned char *decoder, int command) = NULL;
 
-static void log_hex(const char *label, unsigned int value) {
-    char msg[96];
-    size_t n = text_length(label);
-    if (n > sizeof(msg) - 16) {
-        n = sizeof(msg) - 16;
-    }
-    memory_copy(msg, label, n);
-    const char hex[] = "0123456789abcdef";
-    msg[n++] = ' ';
-    msg[n++] = '0';
-    msg[n++] = 'x';
-    for (int i = 0; i < 8; ++i) {
-        msg[n++] = hex[(value >> (28 - 4 * i)) & 15];
-    }
-    msg[n++] = '\r';
-    msg[n++] = '\n';
-    msg[n] = 0;
-    log_append(msg);
-}
-
 /* The event's programmer sound lasts 600s (seen: it stopped by itself exactly 600s after a start, with
    the station still selected; the real service restarted the event for every song). Its own callback
    (0x1018fe0, set by Init through EventInstance::setCallback 0x1a9ab90) is wrapped: when it reports
@@ -477,6 +416,7 @@ static void log_hex(const char *label, unsigned int value) {
    still selected, the pipe worker starts it again. The ring carries on, so the song does too, after a
    short gap. Types seen: 3 programmer sound created, 0 started, 4 destroyed, 5 on a restart. */
 #define XBOX_EVENT_STOPPED 1
+#define XBOX_SOUND_DESTROYED 4
 static volatile int g_xbox_selected = 0;     // the game's last Xbox Music command was play
 static void *volatile g_xbox_instance = NULL; // the station's event instance
 static volatile int g_xbox_restart = 0;      // stopped by itself: the pipe worker starts it again
@@ -484,11 +424,8 @@ static volatile ULONGLONG g_xbox_started = 0; // tick of the last start: only a 
 #define XBOX_EVENT_LIMIT_MS 595000            // any other stop (the game's own) is left alone
 static int (*g_orig_xbox_event_callback)(unsigned int type, void *event, void *parameters) = NULL;
 static int xbox_event_callback(unsigned int type, void *event, void *parameters) {
-    static int s_reports = 0;
-    if (s_reports < 200) {
-        ++s_reports;
-        log_hex("SPOTIFY: Xbox Music event callback, type", type);
-        log_append_value("SPOTIFY:   s since start", (int)((GetTickCount64() - g_start_tick) / 1000));
+    if (type == XBOX_SOUND_DESTROYED) {
+        g_stream_replaced = 1; // the next stream may reuse the old one's address
     }
     if (type == XBOX_EVENT_STOPPED && g_xbox_selected && GetTickCount64() - g_xbox_started >= XBOX_EVENT_LIMIT_MS) {
         g_xbox_restart = 1;
@@ -516,11 +453,7 @@ static void xbox_keep_timeline(void) {
         position < XBOX_REWIND_AFTER_MS) {
         return;
     }
-    int res = ((int (*)(void *, int))(g_game_image + 0x1a9b040))(g_xbox_instance, position - XBOX_REWIND_BY_MS); // setTimelinePosition
-    static int s_reports = 0;
-    if (s_reports++ < 20) {
-        log_append_value("SPOTIFY: Xbox Music timeline moved back 240s (no 600s end); result", res);
-    }
+    ((int (*)(void *, int))(g_game_image + 0x1a9b040))(g_xbox_instance, position - XBOX_REWIND_BY_MS); // setTimelinePosition
 }
 
 static void xbox_restart_if_stopped(void) {
@@ -532,7 +465,7 @@ static void xbox_restart_if_stopped(void) {
     if (g_xbox_selected && g_xbox_instance) {
         g_xbox_started = GetTickCount64();
         int res = ((int (*)(void *))(g_game_image + 0x1a9b390))(g_xbox_instance); // EventInstance::start
-        log_append_value("SPOTIFY: Xbox Music event ran out (600s), started again; result", res);
+        log_append_value("SPOTIFY: Xbox Music event ran out (600s), started again; result ", res);
     }
 }
 
@@ -546,14 +479,16 @@ static void *xbox_event(unsigned char *decoder) {
         }
         ((void *(*)(void **, void *, void *, void *))(g_game_image + 0xfeeec0))(made, (unsigned char *)engine + 0x7f0, NULL, NULL);
         if (!made[0] || *(unsigned char **)made[0] != g_game_image + XBOX_STREAM_VTABLE) {
-            log_append("SPOTIFY report: Xbox Music stream object could not be built\r\n");
+            log_append("SPOTIFY: Xbox Music stream object could not be built.\r\n");
             return NULL;
         }
         unsigned char ok = (*(unsigned char (**)(void *, void *))*(void **)made[0])(made[0], decoder);
         *(void **)(decoder + 0x18) = made[0];
         *(void **)(decoder + 0x20) = made[1];
         object = made[0];
-        log_append_value("SPOTIFY: Xbox Music stream object built, event created", ok);
+        if (!ok) {
+            log_append("SPOTIFY: Xbox Music event could not be created.\r\n");
+        }
         void *instance = NULL;
         if (memory_read_pointer((unsigned char *)object + 0x30, &instance) && instance) {
             g_orig_xbox_event_callback = (int (*)(unsigned int, void *, void *))(g_game_image + 0x1018fe0);
@@ -578,20 +513,21 @@ static void xbox_command_hook(unsigned char *decoder, int command) {
         res = command == 0 ? ((int (*)(void *))(g_game_image + 0x1a9b390))(event)          // EventInstance::start
                            : ((int (*)(void *, int))(g_game_image + 0x1a9b550))(event, 1); // stop, immediate
     }
-    log_append_value(command == 0 ? "SPOTIFY: Xbox Music station on, event start result" : "SPOTIFY: Xbox Music station off, event stop result", res);
-    log_append_value("SPOTIFY:   s since start", (int)((GetTickCount64() - g_start_tick) / 1000));
+    if (res != 0) {
+        log_append_value(command == 0 ? "SPOTIFY: Xbox Music station could not start; result " : "SPOTIFY: Xbox Music station could not stop; result ", res);
+    }
 }
 
 /* FMOD_SOUND_PCMREAD_CALLBACK of the endless stream: Spotify's audio, paced by the game's pulls. */
 static int xbox_stream_read_hook(void *sound, void *data, unsigned int datalen) {
-    g_xbox_sound = sound; // FMOD reads a stream once on creation, before Studio plays it
-    static int s_logged = 0;
-    if (!s_logged) {
-        s_logged = 1;
-        log_append_value("SPOTIFY: Xbox Music station pulls Spotify, bytes per read", (int)datalen);
-    }
     feed_lock();
+    if (sound != g_xbox_sound || g_stream_replaced) {
+        g_stream_replaced = 0;
+        xbox_replay_unplayed();
+    }
+    g_xbox_sound = sound; // FMOD reads a stream once on creation, before Studio plays it
     pcm_read(data, datalen);
+    g_stream_frames += datalen / sizeof(PcmFrame);
     feed_unlock();
     return 0;
 }
@@ -632,8 +568,13 @@ static void *install_jmp_hook(unsigned char *target, size_t copy_len, void *hook
 }
 
 static wchar_t s_work_dir[PATH_CAPACITY];
-static char g_np_title[256] = "Spotify Radio";
-static char g_np_artist[256] = "Connected";
+// The HUD hook (game thread) reads the shown buffer every frame while the poll fills the other one and
+// then flips: a half-written title never reaches the HUD. A buffer is refilled only a poll (~0.5s) later.
+typedef struct {
+    char title[256], artist[256];
+} NowPlaying;
+static NowPlaying g_np[2] = {{"Spotify Radio", "Connected"}};
+static volatile LONG g_np_shown = 0;
 
 // nowplaying.txt (written by onevent.cmd): line 1 = title, further lines = artists.
 // The HUD font has no glyphs beyond Latin (squares), and a font fallback override crashes the
@@ -998,17 +939,20 @@ static void now_playing_poll(void) {
     }
     title[t] = '\0';
     artist[a] = '\0';
-    romanize_text(title, g_np_title, sizeof(g_np_title));
-    romanize_text(artist, g_np_artist, sizeof(g_np_artist));
+    LONG next = !__atomic_load_n(&g_np_shown, __ATOMIC_RELAXED);
+    NowPlaying *np = &g_np[next];
+    romanize_text(title, np->title, sizeof(np->title));
+    romanize_text(artist, np->artist, sizeof(np->artist));
     size_t visible = 0;
-    for (const char *c = g_np_title; *c; ++c) {
+    for (const char *c = np->title; *c; ++c) {
         visible += *c != ' ';
     }
     if (visible == 0) {
-        memory_copy(g_np_title, "Spotify Radio", sizeof("Spotify Radio")); // unsupported script: never a blank banner
+        memory_copy(np->title, "Spotify Radio", sizeof("Spotify Radio")); // unsupported script: never a blank banner
     }
-    ellipsize(g_np_title, 80); // the game's own longest title is 78 characters
-    ellipsize(g_np_artist, 40);
+    ellipsize(np->title, 80); // the game's own longest title is 78 characters
+    ellipsize(np->artist, 40);
+    __atomic_store_n(&g_np_shown, next, __ATOMIC_RELEASE);
 }
 
 /* The radio HUD on the Xbox Music station (HudStatusRadioManager::OnSystemEvent, 0x7835b0). Event 0x10
@@ -1023,19 +967,19 @@ static void hud_radio_event_hook(unsigned char *manager, int category, void *cod
         return; // no Xbox Music service, no sign-in error
     }
     g_orig_hud_radio_event(manager, category, code, payload);
+    const NowPlaying *np = &g_np[__atomic_load_n(&g_np_shown, __ATOMIC_ACQUIRE)];
     // 0x10 comes about every frame on Xbox Music (seen: 21k in a drive): push only a new track, or the
     // HUD restarts its banner each time and never shows it
     if (category != 0x10 || !station_name_is(manager + 0x48, "Xbox Music", 10) ||
-        (station_name_is(manager + 0x08, g_np_title, text_length(g_np_title)) &&
-         station_name_is(manager + 0x28, g_np_artist, text_length(g_np_artist)) && !manager[0x78])) {
+        (station_name_is(manager + 0x08, np->title, text_length(np->title)) &&
+         station_name_is(manager + 0x28, np->artist, text_length(np->artist)) && !manager[0x78])) {
         return;
     }
     void (*assign)(void *, const char *, size_t) = (void (*)(void *, const char *, size_t))(g_game_image + 0x22c300);
-    assign(manager + 0x08, g_np_title, text_length(g_np_title));
-    assign(manager + 0x28, g_np_artist, text_length(g_np_artist));
+    assign(manager + 0x08, np->title, text_length(np->title));
+    assign(manager + 0x28, np->artist, text_length(np->artist));
     manager[0x78] = 0;
     ((void (*)(void *))(g_game_image + 0x78a070))(manager);
-    log_append("SPOTIFY: radio HUD shows Spotify's track on Xbox Music.\r\n");
 }
 
 /* The audio options' Xbox Music line (A_AudioOptions.xaml: Visibility bound to IsXboxMusicEnabled,
@@ -1140,6 +1084,7 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
     g_get_group = (int (*)(void *, void **))(game_image + 0x19abbd0);
     g_get_parent = (int (*)(void *, void **))(game_image + 0x19a7170);
     g_set_volume = (int (*)(void *, float))(game_image + 0x19a6470);
+    g_get_position = (int (*)(void *, unsigned int *, unsigned int))(game_image + 0x19ac440);
     g_get_dsp = (int (*)(void *, int, void **))(game_image + 0x19a2860);
     g_get_num_dsps = (int (*)(void *, int *))(game_image + 0x19a3230);
     g_dsp_get_info = (int (*)(void *, char *, unsigned int *, int *, int *, int *))(game_image + 0x19a84c0);
@@ -1158,9 +1103,6 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
         *slot = (void *)&xbox_music_available_hook;
         VirtualProtect(slot, sizeof(*slot), protection, &protection);
     }
-    // RadioSystem::SetRadioStation: mov [rsp+18h],rbx / mov [rsp+20h],rbp / push rsi,rdi,r14 / sub rsp,60h
-    static const unsigned char select_prologue[18] = {0x48, 0x89, 0x5c, 0x24, 0x18, 0x48, 0x89, 0x6c, 0x24,
-                                                      0x20, 0x56, 0x57, 0x41, 0x56, 0x48, 0x83, 0xec, 0x60};
     // the profile's station lock: mov [rsp+10h],rdx / push rdi / sub rsp,30h / mov qword [rsp+20h],-2
     static const unsigned char lock_prologue[19] = {0x48, 0x89, 0x54, 0x24, 0x10, 0x57, 0x48, 0x83, 0xec, 0x30,
                                                     0x48, 0xc7, 0x44, 0x24, 0x20, 0xfe, 0xff, 0xff, 0xff};
@@ -1192,6 +1134,7 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
     if (ok && memory_equal(game_image + 0x1024570, snapshot_prologue, sizeof(snapshot_prologue))) {
         snapshot_hooked = install_jmp_hook(game_image + 0x1024570, sizeof(snapshot_prologue), (void *)&snapshot_copy_hook);
     }
+    // One line per hook, installed or not: a bug report shows at a glance what is in.
     log_append(snapshot_hooked ? "SPOTIFY: Xbox Music gets the stock radio mix (festival speakers on).\r\n"
                                : "SPOTIFY: snapshot hook skipped (unexpected code); no festival speakers on Xbox Music.\r\n");
     log_append(g_orig_xbox_option_visible ? "SPOTIFY: Xbox Music line hidden from the audio options.\r\n"
@@ -1201,10 +1144,7 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
     log_append(g_orig_xbox_command ? "SPOTIFY: Xbox Music station plays Spotify's event (play/stop command hooked).\r\n"
                                    : "SPOTIFY: Xbox Music command hook skipped (unexpected code); the station stays silent.\r\n");
     log_append(g_orig_station_locked ? "SPOTIFY: Xbox Music station unlocked for the radio wheel.\r\n"
-                                       : "SPOTIFY: station lock hook skipped (unexpected code).\r\n");
-    if (ok && memory_equal(game_image + 0x1021450, select_prologue, sizeof(select_prologue))) {
-        g_orig_set_radio_station = install_jmp_hook(game_image + 0x1021450, sizeof(select_prologue), (void *)&set_radio_station_hook);
-    }
+                                     : "SPOTIFY: station lock hook skipped (unexpected code).\r\n");
     log_append(ok ? "SPOTIFY: Xbox Music station enabled for Spotify (gate + stream read hooks).\r\n"
                   : "SPOTIFY: Xbox Music station hooks skipped (unexpected code); Spotify will not play.\r\n");
     // System::update: the feeder runs right after it, on the game's FMOD thread. Prologue:
@@ -1295,12 +1235,9 @@ static void poll_track_controls(void) {
 
 void spotify_bridge_install_controls(unsigned char *game_image) {
     g_controls_image = game_image;
-    HMODULE user32 = LoadLibraryExW(L"user32.dll", 0, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (user32) {
-        g_key_state = (SHORT(WINAPI *)(int))(uintptr_t)GetProcAddress(user32, "GetAsyncKeyState");
-        g_foreground_window = (HWND(WINAPI *)(void))(uintptr_t)GetProcAddress(user32, "GetForegroundWindow");
-        g_window_process = (DWORD(WINAPI *)(HWND, LPDWORD))(uintptr_t)GetProcAddress(user32, "GetWindowThreadProcessId");
-    }
+    g_key_state = GetAsyncKeyState;
+    g_foreground_window = GetForegroundWindow;
+    g_window_process = GetWindowThreadProcessId;
 }
 
 static wchar_t s_exe_path[PATH_CAPACITY];
@@ -1373,9 +1310,9 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
         if (g_pipe_thread) { // an audio thread: the game must not starve it while the ring drains
             SetThreadPriority(g_pipe_thread, 15 /* THREAD_PRIORITY_TIME_CRITICAL */);
         }
-        log_append("SPOTIFY: Rust librespot receiver launched; pure pipe audio bridge active.\r\n");
+        log_append("SPOTIFY: librespot started.\r\n");
     } else {
-        log_append("SPOTIFY: failed to create librespot process.\r\n");
+        log_append("SPOTIFY: librespot could not be started.\r\n");
         CloseHandle(hPipeRead);
     }
 
@@ -1417,7 +1354,7 @@ void spotify_bridge_start(const wchar_t *folder) {
     }
 
     if (GetFileAttributesW(s_exe_path) == INVALID_FILE_ATTRIBUTES) {
-        log_append("SPOTIFY: receiver executable not found; bridge skipped.\r\n");
+        log_append("SPOTIFY: librespot.exe not found; Spotify Radio is off.\r\n");
         return;
     }
 
@@ -1458,5 +1395,5 @@ void spotify_bridge_stop(void) {
         CloseHandle(g_spotify_job);
         g_spotify_job = NULL;
     }
-    log_append("SPOTIFY: receiver stopped.\r\n");
+    log_append("SPOTIFY: librespot stopped.\r\n");
 }

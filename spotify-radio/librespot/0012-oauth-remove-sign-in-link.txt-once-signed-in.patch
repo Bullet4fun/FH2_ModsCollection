@@ -1,0 +1,52 @@
+From 12ae5ef35dd9f93748991ecdf5e044db8ea41e87 Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 02:16:22 +0200
+Subject: [PATCH] oauth: remove sign-in-link.txt once signed in
+
+Removed when the oauth token arrives (the link is single-use, even if
+the account is then refused, e.g. free) and after each successful
+connect with a saved session.
+---
+ src/main.rs | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/main.rs b/src/main.rs
+index 46df3c7..418055f 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1886,6 +1886,15 @@ async fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
+     drop(permit);
+ }
+ 
++/// The oauth sign-in link (sign-in-link.txt) is spent once a token is in hand: don't leave it lying around.
++fn remove_sign_in_link() {
++    match std::fs::remove_file("sign-in-link.txt") {
++        Ok(()) => info!("Removed sign-in-link.txt"),
++        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
++        Err(e) => warn!("Could not remove sign-in-link.txt: {e}"),
++    }
++}
++
+ #[tokio::main(flavor = "current_thread")]
+ async fn main() {
+     const RUST_BACKTRACE: &str = "RUST_BACKTRACE";
+@@ -1974,6 +1983,7 @@ async fn main() {
+             error!("Failed to get Spotify access token: {e}");
+             exit(1);
+         });
++        remove_sign_in_link(); // the link is single-use, even if the account is then refused (free)
+         last_credentials = Some(Credentials::with_access_token(oauth_token.access_token));
+         connecting = true;
+     } else if discovery.is_none() {
+@@ -2106,6 +2116,8 @@ async fn main() {
+                 spirc = Some(spirc_);
+                 spirc_task = Some(Box::pin(spirc_task_));
+ 
++                remove_sign_in_link(); // signed in with a saved session: an old link is stale
++
+                 connecting = false;
+             },
+             _ = async {
+-- 
+2.42.0.windows.2
+

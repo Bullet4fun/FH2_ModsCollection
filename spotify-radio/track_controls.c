@@ -21,24 +21,26 @@ static const char *const ini_keys[TRACK_COMMANDS][2] = {
 };
 
 static const char default_ini[] =
-    "; Spotify Radio track buttons. They work only while Spotify Radio is playing in the car.\r\n"
-    ";\r\n"
-    "; Gamepad: A B X Y LB RB LS RS View Menu Up Down Left Right\r\n"
-    ";   LS       tap the left stick\r\n"
-    ";   LS LS    tap it twice\r\n"
-    ";   LS+RB    press them together (the game sees both buttons too)\r\n"
-    "; Keyboard: F1-F12, A-Z, 0-9\r\n"
-    "; Leave a line empty to turn it off. Extra Options uses the D-pad and RS: pick other buttons.\r\n"
+    "// FH2 Spotify Radio by Bullet4fun: https://github.com/Bullet4fun/FH2_ModsCollection\r\n"
+    "// Works with Azimuth 0.9.10; other Azimuth versions are untested.\r\n"
+    "//\r\n"
+    "// Read at game startup. A key left out keeps its default; an empty value turns a button off.\r\n"
+    "// The track buttons work only while Spotify Radio is playing in the car.\r\n"
+    "// Gamepad: A B X Y LB RB LS RS View Menu Up Down Left Right\r\n"
+    "//   LS       tap the left stick\r\n"
+    "//   LS LS    tap it twice\r\n"
+    "//   LS+RB    press them together (the game sees both buttons too)\r\n"
+    "// Keyboard: F1-F12, A-Z, 0-9\r\n"
+    "// Extra Options uses the D-pad and RS: pick other buttons.\r\n"
     "\r\n"
     "[Controls]\r\n"
-    "NextTrack=LS\r\n"
-    "PreviousTrack=LS LS\r\n"
-    "PlayPause=\r\n"
-    "NextTrackKey=F6\r\n"
-    "PreviousTrackKey=F5\r\n"
-    "PlayPauseKey=F7\r\n"
-    "; How fast a double tap must be, in milliseconds (100-600). A single tap waits this long.\r\n"
-    "DoubleTapTime=200\r\n";
+    "NextTrack = LS             // Next track, gamepad. (Default = LS)\r\n"
+    "PreviousTrack = LS LS      // Previous track, gamepad. (Default = LS LS)\r\n"
+    "PlayPause =                // Play/pause, gamepad. (Default = empty, off)\r\n"
+    "NextTrackKey = F6          // Next track, keyboard. (Default = F6)\r\n"
+    "PreviousTrackKey = F5      // Previous track, keyboard. (Default = F5)\r\n"
+    "PlayPauseKey = F7          // Play/pause, keyboard. (Default = F7)\r\n"
+    "DoubleTapTime = 200        // How fast a double tap must be, in milliseconds; a single tap waits this long. (Default = 200) (100/600)\r\n";
 
 static int equal_n(const char *a, size_t length, const char *b) {
     size_t i = 0;
@@ -210,23 +212,29 @@ static void parse_ini(void) {
         while (*end && *end != '\r' && *end != '\n') ++end;
         char saved = *end;
         *end = 0;
+        char *cut = line; // "Key = value   // note": the note and the padding go
+        while (*cut && *cut != ';' && !(cut[0] == '/' && cut[1] == '/')) ++cut;
+        while (cut > line && (cut[-1] == ' ' || cut[-1] == '\t')) --cut;
+        *cut = 0; // only this line's bytes: the buffer is parsed once
         while (*line == ' ' || *line == '\t') ++line;
         if (*line == '[') {
             in_controls = equal_n(line, text_length(line), "[Controls]");
         } else if (in_controls && *line && *line != ';') {
             char *eq = line;
             while (*eq && *eq != '=') ++eq;
-            if (*eq && equal_n(line, (size_t)(eq - line), "DoubleTapTime")) {
+            char *key_end = eq;
+            while (key_end > line && (key_end[-1] == ' ' || key_end[-1] == '\t')) --key_end;
+            if (*eq && equal_n(line, (size_t)(key_end - line), "DoubleTapTime")) {
                 unsigned ms = 0;
-                for (const char *d = eq + 1; *d >= '0' && *d <= '9'; ++d) ms = ms * 10 + (unsigned)(*d - '0');
+                const char *d = eq + 1;
+                while (*d == ' ' || *d == '\t') ++d;
+                for (; *d >= '0' && *d <= '9'; ++d) ms = ms * 10 + (unsigned)(*d - '0');
                 if (ms >= 100 && ms <= 600) {
                     double_tap_ms = ms;
                 } else {
                     log_append("SPOTIFY: FH2_SpotifyRadio.ini: DoubleTapTime must be 100-600; 200 is used.\r\n");
                 }
             } else if (*eq) {
-                char *key_end = eq;
-                while (key_end > line && (key_end[-1] == ' ' || key_end[-1] == '\t')) --key_end;
                 for (unsigned c = 1; c < TRACK_COMMANDS; ++c) {
                     for (unsigned k = 0; k < 2; ++k) {
                         if (!equal_n(line, (size_t)(key_end - line), ini_keys[c][k])) {

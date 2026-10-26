@@ -36,6 +36,8 @@ EXPORTS
     FlushFileBuffers
     MoveFileExW
     DeleteFileW
+    FileTimeToLocalFileTime
+    FileTimeToSystemTime
     GetTickCount64
     CreateThread
     Sleep

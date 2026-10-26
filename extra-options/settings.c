@@ -241,7 +241,7 @@ static int parse_ini(char *text, ModOptions *options) {
             *text++ = 0;
         }
         for (char *cursor = line; *cursor; ++cursor) {
-            if (*cursor == ';' || *cursor == '#') {
+            if (*cursor == ';' || *cursor == '#' || (cursor[0] == '/' && cursor[1] == '/')) {
                 *cursor = 0;
                 break;
             }

@@ -113,6 +113,16 @@ static int rpc_read_packet(HANDLE pipe, uint32_t *opcode, char *buffer, uint32_t
     return 1;
 }
 
+// Winsock without its headers (freestanding build): a SOCKET is a UINT_PTR, ~0 when invalid. The tests'
+// windows.h brings winsock.h, which declares all but WSASocketW.
+#ifndef _WINSOCKAPI_
+__declspec(dllimport) int WINAPI WSAStartup(WORD version, void *data);
+__declspec(dllimport) int WINAPI connect(UINT_PTR s, const void *address, int length);
+__declspec(dllimport) int WINAPI closesocket(UINT_PTR s);
+#endif
+__declspec(dllimport) UINT_PTR WINAPI WSASocketW(int family, int type, int protocol, void *info, unsigned int group,
+                                                 DWORD flags);
+
 typedef struct {
     unsigned short family; // AF_UNIX = 1
     char path[108];
@@ -121,37 +131,24 @@ typedef struct {
 // Under Wine/Proton, Discord runs as a Linux app and listens on a Unix socket, not on
 // \\.\pipe\discord-ipc-N. Wine's Winsock has AF_UNIX and takes a Z:\ path; ReadFile/WriteFile/
 // CloseHandle work on its socket handles. XDG_RUNTIME_DIR does not reach Windows programs, so every
-// Z:\run\user\<uid> is tried, with the Flatpak Discord/Vesktop folders. ws2_32 is loaded only under Wine.
+// Z:\run\user\<uid> is tried, with the Flatpak Discord/Vesktop folders. Only Wine has that folder, so
+// Winsock starts only there.
 static HANDLE rpc_connect_unix(void) {
-    // Winsock without its headers (freestanding build): a SOCKET is a UINT_PTR, ~0 when invalid.
-    static int (WINAPI *wsa_startup)(WORD, void *);
-    static UINT_PTR (WINAPI *wsa_socket)(int, int, int, void *, unsigned int, DWORD);
-    static int (WINAPI *sock_connect)(UINT_PTR, const void *, int);
-    static int (WINAPI *sock_close)(UINT_PTR);
-    if (!wsa_startup) {
-        if (!GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version")) {
-            return INVALID_HANDLE_VALUE;
-        }
-        HMODULE ws = LoadLibraryExW(L"ws2_32.dll", NULL, 0);
-        static unsigned char wsa[512]; // WSADATA (408 bytes on x64)
-        if (!ws) {
-            return INVALID_HANDLE_VALUE;
-        }
-        *(FARPROC *)&wsa_socket = GetProcAddress(ws, "WSASocketW");
-        *(FARPROC *)&sock_connect = GetProcAddress(ws, "connect");
-        *(FARPROC *)&sock_close = GetProcAddress(ws, "closesocket");
-        *(FARPROC *)&wsa_startup = GetProcAddress(ws, "WSAStartup");
-        if (!wsa_startup || !wsa_socket || !sock_connect || !sock_close || wsa_startup(MAKEWORD(2, 2), wsa) != 0) {
-            wsa_startup = NULL;
-            return INVALID_HANDLE_VALUE;
-        }
-    }
+    static int wsa_started;
     static const char *const folders[] = {"", "app\\com.discordapp.Discord\\", "app\\dev.vencord.Vesktop\\",
                                           "app\\com.discordapp.DiscordCanary\\", "snap.discord\\"};
     WIN32_FIND_DATAW user;
     HANDLE find = FindFirstFileW(L"Z:\\run\\user\\*", &user);
     if (find == INVALID_HANDLE_VALUE) {
         return INVALID_HANDLE_VALUE;
+    }
+    if (!wsa_started) {
+        static unsigned char wsa[512]; // WSADATA (408 bytes on x64)
+        if (WSAStartup(MAKEWORD(2, 2), (void *)wsa) != 0) {
+            FindClose(find);
+            return INVALID_HANDLE_VALUE;
+        }
+        wsa_started = 1;
     }
     HANDLE result = INVALID_HANDLE_VALUE;
     do {
@@ -184,14 +181,14 @@ static HANDLE rpc_connect_unix(void) {
                     (GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND)) {
                     continue; // skip missing paths; Wine answers ERROR_INVALID_PARAMETER for a live socket file
                 }
-                UINT_PTR s = wsa_socket(1, 1, 0, NULL, 0, 0); // AF_UNIX, SOCK_STREAM, not overlapped: plain ReadFile/WriteFile
+                UINT_PTR s = WSASocketW(1, 1, 0, NULL, 0, 0); // AF_UNIX, SOCK_STREAM, not overlapped: plain ReadFile/WriteFile
                 if (s == ~(UINT_PTR)0) {
                     continue;
                 }
-                if (sock_connect(s, &address, sizeof(address)) == 0) {
+                if (connect(s, (const void *)&address, sizeof(address)) == 0) {
                     result = (HANDLE)s;
                 } else {
-                    sock_close(s);
+                    closesocket(s);
                 }
             }
         }

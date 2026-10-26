@@ -9,6 +9,10 @@
 #include "mod_log.h"
 #include "support.h"
 
+#ifndef SPOTIFY_VERSION
+#define SPOTIFY_VERSION "dev" // build.py passes the release version
+#endif
+
 // No FH2_MOD_GAMES: an undeclared mod counts as Forza Horizon 2 only, which is what this one is (every
 // hook is an FH2 address), so the loader never loads it into Fast & Furious. An explicit declaration
 // or a host->game check makes one antivirus ML engine flag the DLL.
@@ -101,7 +105,8 @@ __declspec(dllexport) int FH2ModLoad(const FH2ModHost *host) {
     if (path_join(path, host->data_dir, L"FH2_SpotifyRadio.log") &&
         path_join(previous, host->data_dir, L"FH2_SpotifyRadio.previous.log")) {
         MoveFileExW(path, previous, MOVEFILE_REPLACE_EXISTING);
-        mod_log_open(path);
+        mod_log_open(path, 1, "SpotifyRadio");
+        log_append("FH2 Spotify Radio " SPOTIFY_VERSION "\r\n");
     }
     if (install_logo(host)) {
         spotify_bridge_mount_logo_folder(host->game_image);

@@ -5,6 +5,7 @@ The mod loader (azimuth-tls.dll) lives in its own repo, FH2_ModLoader.
 
 import argparse
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -15,6 +16,7 @@ COMMON_SOURCES = [
     "extra-options/settings.c",
     "common/support.c",
     "common/logging.c",
+    "common/mod_log.c",
     "extra-options/patch_engine.c",
     "extra-options/verification.c",
     "extra-options/sha256.c",
@@ -51,12 +53,12 @@ COMMON_SOURCES = [
     "extra-options/features/png_decode.c",
 ]
 # Separate mods for the loader; each is its own DLL in data\bin\mods\.
-DISCORD_SOURCES = ["discord-rpc/discord_mod.c", "discord-rpc/discord_rpc.c", "common/support.c"]
+DISCORD_SOURCES = ["discord-rpc/discord_mod.c", "discord-rpc/discord_rpc.c", "common/support.c", "common/mod_log.c"]
 SPOTIFY_SOURCES = ["spotify-radio/spotify_mod.c", "common/mod_log.c", "spotify-radio/spotify_bridge.c", "spotify-radio/track_controls.c",
                    "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c", "common/support.c"]
 INCLUDE_DIRS = ["common", "sdk", "extra-options", "spotify-radio", "discord-rpc"]
-SPOTIFY_VERSION = "1.2.0"
-DISCORD_VERSION = "1.1.0"
+SPOTIFY_VERSION = "1.3.0"
+DISCORD_VERSION = "1.2.0"
 
 
 def version_resource(compiler, directory, filename, description, product, version):
@@ -131,6 +133,10 @@ def compiler_arguments(compiler, options):
     ]
     if options.mod:
         arguments.append("-DFH2_AZIMUTH=1")
+    if options.spotify:
+        arguments.append(f'-DSPOTIFY_VERSION="{SPOTIFY_VERSION}"')  # the log's first line
+    if options.discord:
+        arguments.append(f'-DDISCORD_VERSION="{DISCORD_VERSION}"')  # its line in the loader's log
     return arguments
 
 
@@ -183,6 +189,13 @@ def build(compiler, output, directory, options):
     exception_library = directory / "ntdll.lib"
     subprocess.run([str(compiler), "dlltool", "-m", "i386:x86-64", "-d", str(SOURCE / "common/ntdll.def"),
                     "-l", str(exception_library)], check=True)
+    # keyboard, focus and socket calls imported by name: resolving them through GetProcAddress
+    # strings looks like a hidden keylogger or backdoor to antivirus ML engines
+    system_libraries = []
+    for name in ("user32", "ws2_32"):
+        system_libraries.append(str(directory / f"{name}.lib"))
+        subprocess.run([str(compiler), "dlltool", "-m", "i386:x86-64", "-d", str(SOURCE / f"common/{name}.def"),
+                        "-l", system_libraries[-1]], check=True)
     # /release (a PE checksum) and a debug directory keep antivirus ML engines quiet; the PDB
     # stays in the build folder.
     link_arguments = [
@@ -194,18 +207,25 @@ def build(compiler, output, directory, options):
         "/nodefaultlib",
         "/dynamicbase",
         "/nxcompat",
-        "/out:" + str(output),
+        "/out:" + str(directory / output.name),  # copied out below: the output path is in the PDB id
         "/implib:" + str(directory / "extra_options.lib"),
         *objects,
         str(import_library),
         str(exception_library),
+        *system_libraries,
         version_resource(compiler, directory, output.name, *describe(options)),
         "/release",
         "/debug",
         "/pdb:" + str(directory / output.with_suffix(".pdb").name),
         "/pdbaltpath:%_PDB%",
+        "/Brepro",  # PDB id from the content, not random
+        # the last commit's time instead of the clock: the same source gives the same bytes, so the
+        # file scanned before a release is the file shipped
+        "/timestamp:" + subprocess.run(["git", "-c", "safe.directory=*", "log", "-1", "--format=%ct"],
+                                       cwd=SOURCE, capture_output=True, text=True, check=True).stdout.strip(),
     ]
     subprocess.run(link_arguments, check=True)
+    shutil.copyfile(directory / output.name, output)
 
 
 def main():
@@ -217,9 +237,13 @@ def main():
     output = (options.output or SOURCE.parent / filename).resolve()
     if options.build_dir:
         build(compiler, output, options.build_dir.resolve(), options)
-    else:
-        with tempfile.TemporaryDirectory(prefix="fh2-extra-options-build-") as temporary:
-            build(compiler, output, Path(temporary), options)
+    else:  # a fixed folder: object paths end up in the PDB id, so a random one changes the DLL
+        directory = Path(tempfile.gettempdir()) / f"fh2-build-{Path(filename).stem}"
+        shutil.rmtree(directory, ignore_errors=True)
+        try:
+            build(compiler, output, directory, options)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
     print(output)
 
 
