@@ -1,6 +1,6 @@
 """Build the mods with Zig 0.15.2, including cross-compilation on Linux.
 Usage: python build.py /path/to/zig (--mod | --spotify | --discord) [--output PATH]
-The mod loader (azimuth-tls.dll) lives in its own repo, FH2_ModLoader.
+The mod loader (Azimuth Mod Loader, dinput8.dll) lives in its own repo, Azimuth_ModLoader.
 """
 
 import argparse
@@ -23,7 +23,6 @@ COMMON_SOURCES = [
     "extra-options/patches_generated.c",
     "extra-options/features/garage.c",
     "extra-options/features/road_placement.c",
-    "extra-options/features/gamerpic.c",
     "extra-options/features/treasure_map.c",
     "extra-options/features/minimap.c",
     "extra-options/features/rims.c",
@@ -49,16 +48,44 @@ COMMON_SOURCES = [
     "extra-options/features/autodrive_game.c",
     "extra-options/features/autodrive_notice.c",
     "extra-options/features/autodrive_ui.c",
-    "extra-options/features/png_validation.c",
-    "extra-options/features/png_decode.c",
+    "extra-options/features/engine_swaps.c",
+    "extra-options/features/transmission_swaps.c",
+    "extra-options/features/world_drivatars.c",
+    "extra-options/features/local_liveries.c",
+    "extra-options/features/plugins.c",
+    "extra-options/features/display_units.c",
+    "extra-options/features/media_files.c",
+    "extra-options/features/video_redirect.c",
+    "extra-options/features/showroom_photo.c",
+    "extra-options/features/manufacturer_jump.c",
+    "extra-options/features/presentation_controls.c",
+    "extra-options/features/driver_options.c",
+    "extra-options/features/photo_environment.c",
+    "extra-options/features/audio_volume.c",
+    "extra-options/features/pause_menu.c",
+    "extra-options/features/addon_json.c",
+    "extra-options/features/carbin_patch.c",
+    "extra-options/features/addon_database.c",
+    "extra-options/features/addons.c",
+    "extra-options/features/addon_archives.c",
+    "extra-options/features/addon_strings.c",
+    "extra-options/features/addon_wheels.c",
+    "extra-options/features/roof_aero.c",
+    "extra-options/features/speed_zone.c",
+    "extra-options/features/bindings.c",
+    "extra-options/features/offline_events.c",
+    "extra-options/features/custom_showcases.c",
+    "extra-options/features/offline_event_division.c",
+    "extra-options/features/offline_event_setup.c",
+    "extra-options/features/ui_controls.c",
 ]
 # Separate mods for the loader; each is its own DLL in data\bin\mods\.
 DISCORD_SOURCES = ["discord-rpc/discord_mod.c", "discord-rpc/discord_rpc.c", "common/support.c", "common/mod_log.c"]
 SPOTIFY_SOURCES = ["spotify-radio/spotify_mod.c", "common/mod_log.c", "spotify-radio/spotify_bridge.c", "spotify-radio/track_controls.c",
                    "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c", "common/support.c"]
 INCLUDE_DIRS = ["common", "sdk", "extra-options", "spotify-radio", "discord-rpc"]
-SPOTIFY_VERSION = "1.3.0"
-DISCORD_VERSION = "1.2.0"
+SPOTIFY_VERSION = "1.4.0"
+DISCORD_VERSION = "1.3.0"
 
 
 def version_resource(compiler, directory, filename, description, product, version):
@@ -121,6 +148,8 @@ def compiler_arguments(compiler, options):
         "-fno-stack-protector",
         "-fms-extensions",
         "-funwind-tables",
+        "-ffunction-sections",  # with /opt:ref below: a mod ships only the code it calls
+        "-fdata-sections",
         "-O2",
         "-Wall",
         "-Wextra",
@@ -143,12 +172,12 @@ def compiler_arguments(compiler, options):
 def describe(options):
     """(file description, product, version) for the VERSIONINFO resource."""
     if options.spotify:
-        return "Spotify radio for Forza Horizon 2 (FH2_ModLoader mod)", "FH2 Mods Collection", SPOTIFY_VERSION
+        return "Spotify radio for Forza Horizon 2 (Azimuth Mod Loader mod)", "FH2 Mods Collection", SPOTIFY_VERSION
     if options.discord:
-        return "Discord Rich Presence for Forza Horizon 2 (FH2_ModLoader mod)", "FH2 Mods Collection", DISCORD_VERSION
+        return "Discord Rich Presence for Forza Horizon 2 (Azimuth Mod Loader mod)", "FH2 Mods Collection", DISCORD_VERSION
     header = (SOURCE / "common/extra_options.h").read_text(encoding="utf-8")
     version = header.split('#define MOD_VERSION "', 1)[1].split('"', 1)[0]  # ExtraOptions' own version
-    return "Forza Horizon 2 Extra Options by RokkuDayo (FH2_ModLoader mod)", "Forza Horizon 2 Extra Options", version
+    return "Forza Horizon 2 Extra Options by RokkuDayo (Azimuth Mod Loader mod)", "Forza Horizon 2 Extra Options", version
 
 def build(compiler, output, directory, options):
     directory.mkdir(parents=True, exist_ok=True)
@@ -166,13 +195,16 @@ def build(compiler, output, directory, options):
     else:  # --mod: the loader owns Azimuth's helper ABI and finds the game
         sources = [*COMMON_SOURCES, "extra-options/adapters/mod.c", *azimuth_host]
     arguments = compiler_arguments(compiler, options)
+    # Every step runs in the build folder with relative names, and source paths are mapped to ".":
+    # file paths end up in the PDB id, so where the repo or the build folder lives must not matter.
+    path_maps = [f"-ffile-prefix-map={SOURCE}=.", f"-ffile-prefix-map={compiler.parent}=zig"]
     for filename in sources:
-        object_file = directory / (Path(filename).stem + ".obj")
+        object_file = Path(filename).stem + ".obj"
         command = ([str(compiler), "clang", "-target", "x86_64-w64-windows-gnu", "-c"]
                    if filename.endswith(".s") else arguments)
-        subprocess.run([*command, str(SOURCE / filename), "-o", str(object_file)], check=True)
-        objects.append(str(object_file))
-    import_library = directory / "kernel32.lib"
+        subprocess.run([*command, *path_maps, str(SOURCE / filename), "-o", object_file], check=True, cwd=directory)
+        objects.append(object_file)
+    import_library = "kernel32.lib"
     subprocess.run(
         [
             str(compiler),
@@ -182,20 +214,21 @@ def build(compiler, output, directory, options):
             "-d",
             str(SOURCE / "common/kernel32.def"),
             "-l",
-            str(import_library),
+            import_library,
         ],
         check=True,
+        cwd=directory,
     )
-    exception_library = directory / "ntdll.lib"
+    exception_library = "ntdll.lib"
     subprocess.run([str(compiler), "dlltool", "-m", "i386:x86-64", "-d", str(SOURCE / "common/ntdll.def"),
-                    "-l", str(exception_library)], check=True)
+                    "-l", exception_library], check=True, cwd=directory)
     # keyboard, focus and socket calls imported by name: resolving them through GetProcAddress
     # strings looks like a hidden keylogger or backdoor to antivirus ML engines
     system_libraries = []
     for name in ("user32", "ws2_32"):
-        system_libraries.append(str(directory / f"{name}.lib"))
+        system_libraries.append(f"{name}.lib")
         subprocess.run([str(compiler), "dlltool", "-m", "i386:x86-64", "-d", str(SOURCE / f"common/{name}.def"),
-                        "-l", system_libraries[-1]], check=True)
+                        "-l", system_libraries[-1]], check=True, cwd=directory)
     # /release (a PE checksum) and a debug directory keep antivirus ML engines quiet; the PDB
     # stays in the build folder.
     link_arguments = [
@@ -207,24 +240,26 @@ def build(compiler, output, directory, options):
         "/nodefaultlib",
         "/dynamicbase",
         "/nxcompat",
-        "/out:" + str(directory / output.name),  # copied out below: the output path is in the PDB id
-        "/implib:" + str(directory / "extra_options.lib"),
+        "/out:" + output.name,  # copied out below: the output path is in the PDB id
+        "/implib:extra_options.lib",
         *objects,
-        str(import_library),
-        str(exception_library),
+        import_library,
+        exception_library,
         *system_libraries,
-        version_resource(compiler, directory, output.name, *describe(options)),
+        Path(version_resource(compiler, directory, output.name, *describe(options))).name,
         "/release",
         "/debug",
-        "/pdb:" + str(directory / output.with_suffix(".pdb").name),
+        "/opt:ref",  # /debug alone keeps unused functions (and their imports) in the DLL
+        "/pdb:" + output.with_suffix(".pdb").name,
         "/pdbaltpath:%_PDB%",
         "/Brepro",  # PDB id from the content, not random
+        "/pdbsourcepath:C:\\build",  # not the build folder's real path
         # the last commit's time instead of the clock: the same source gives the same bytes, so the
         # file scanned before a release is the file shipped
         "/timestamp:" + subprocess.run(["git", "-c", "safe.directory=*", "log", "-1", "--format=%ct"],
                                        cwd=SOURCE, capture_output=True, text=True, check=True).stdout.strip(),
     ]
-    subprocess.run(link_arguments, check=True)
+    subprocess.run(link_arguments, check=True, cwd=directory)
     shutil.copyfile(directory / output.name, output)
 
 

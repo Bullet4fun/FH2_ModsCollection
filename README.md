@@ -1,7 +1,7 @@
 # FH2 Mods Collection
 
-Mods for **Forza Horizon 2** on Azimuth. They need
-[FH2 Mod Loader](https://github.com/Bullet4fun/FH2_ModLoader).
+Mods for **Forza Horizon 2** on Azimuth 1.0.3 or newer. They need the
+[Azimuth Mod Loader](https://github.com/Bullet4fun/Azimuth_ModLoader).
 
 | Mod | What it does |
 |---|---|
@@ -11,7 +11,7 @@ Mods for **Forza Horizon 2** on Azimuth. They need
 
 ## Install
 
-Unzip the mods you want from the release into `data\bin\`. Each mod is optional; delete its DLL to
+Unzip the mods you want from the release into the Azimuth folder (where `azimuth.exe` is). Each mod is optional; delete its DLL to
 turn it off.
 
 ## Build

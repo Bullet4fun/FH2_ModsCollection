@@ -1270,8 +1270,7 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
     STARTUPINFOW si;
     memory_copy(&si, &(STARTUPINFOW){0}, sizeof(si));
     si.cb = sizeof(si);
-    si.dwFlags = 0x00000101; // STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES
-    si.wShowWindow = 0;      // SW_HIDE
+    si.dwFlags = 0x00000100; // STARTF_USESTDHANDLES; CREATE_NO_WINDOW below already means no console
     si.hStdOutput = hPipeWrite;
     static wchar_t log_path[PATH_CAPACITY];
     HANDLE hLog = INVALID_HANDLE_VALUE;

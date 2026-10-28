@@ -1,25 +1,25 @@
-/* Mod-loader adapter: this DLL is loaded from data\bin\mods\ by the FH2 mod loader, which owns
-   Azimuth's helper ABI and has already located the game. */
-#include "fh2_mod.h"
+/* Mod-loader adapter: this DLL is loaded from mods\ by the Azimuth Mod Loader, which has
+   already located the game Azimuth mapped. */
+#include "azimuth_mod.h"
 #include "logging.h"
 #include "runtime.h"
 #include "support.h"
 
-FH2_MOD_GAMES(FH2_GAME_FORZA_HORIZON_2); // every patch is a Forza Horizon 2 address
+AZIMUTH_MOD_GAMES(AZIMUTH_GAME_FORZA_HORIZON_2); // every patch is a Forza Horizon 2 address
 
 void adapter_process_attach(HINSTANCE instance) {
-    (void)instance; // the work happens in FH2ModLoad, called by the loader
+    (void)instance; // the work happens in AzimuthModLoad, called by the loader
 }
 
-__declspec(dllexport) int FH2ModLoad(const FH2ModHost *host) {
-    if (!host || host->size < sizeof(*host) || host->api_version != FH2_MOD_API_VERSION ||
+__declspec(dllexport) int AzimuthModLoad(const AzimuthModHost *host) {
+    if (!host || host->size < sizeof(*host) || host->api_version != AZIMUTH_MOD_API_VERSION ||
         !host->game_image) {
         return 0;
     }
-    if (host->game != FH2_GAME_FORZA_HORIZON_2) {
+    if (host->game != AZIMUTH_GAME_FORZA_HORIZON_2) {
         return 0; // every patch is an FH2 address: another build of the engine is left alone
     }
-    CreateDirectoryW(host->data_dir, NULL); // ini, .dat, log, Gamerpic.png; fails harmlessly if it exists
+    CreateDirectoryW(host->data_dir, NULL); // ini, .dat, log; fails harmlessly if it exists
     if (!runtime_initialize(host->game_image, host->game_exe, host->data_dir)) {
         return 0;
     }

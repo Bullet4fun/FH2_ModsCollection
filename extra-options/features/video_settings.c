@@ -3,6 +3,8 @@
 #include "features.h"
 #include "logging.h"
 #include "support.h"
+#include "audio_volume.h"
+#include "display_units.h"
 
 typedef struct {
     uint32_t magic, version;
@@ -10,7 +12,7 @@ typedef struct {
 } SavedVideoSettings;
 
 #define SETTINGS_MAGIC 0x32444846u
-#define SETTINGS_VERSION 8u
+#define SETTINGS_VERSION 19u
 #define DEFAULT_SETTING_VALUES                                                                     \
     {[DRIFT_MODE] = DRIFT_DRIVER_ONLY,                                                             \
      [DRIFT_CHASE_SENSITIVITY] = 35,                                                               \
@@ -28,12 +30,21 @@ typedef struct {
      [MINIMAP_ORIENTATION] = 1,                                                                    \
      [AUTODRIVE_CINEMATIC] = 1,                                                                    \
      [SPAWN_LOCATION] = SPAWN_DEFAULT,                                                             \
-     [CAR_CHANGE_POSITION] = CAR_POSITION_NEAREST_ROAD}
+     [CAR_CHANGE_POSITION] = CAR_POSITION_NEAREST_ROAD,                                            \
+     [BEN_PHOTO_DIALOGUE] = 1,                                                                     \
+     [ASHLEY_GARAGE_DIALOGUE] = 1,                                                                 \
+     [WHEELSPIN_NOTIFICATION] = 1,                                                                 \
+     [CHECKPOINT_SOUND] = 1,                                                                       \
+     [MASTER_VOLUME] = 100,                                                                        \
+     [OPEN_WORLD_DRIVATARS] = 1,                                                                   \
+     [SKILL_POINT_NOTIFICATION] = 1, \
+     [SKILL_COUNTER_SHAKE] = 1, \
+     [SPEED_ZONE_VIGNETTE] = 1}
 
 static const SavedVideoSettings defaults = {SETTINGS_MAGIC, SETTINGS_VERSION,
                                             DEFAULT_SETTING_VALUES};
 static SavedVideoSettings settings = {SETTINGS_MAGIC, SETTINGS_VERSION, DEFAULT_SETTING_VALUES};
-_Static_assert(sizeof(SavedVideoSettings) == 104, "Saved settings ABI");
+_Static_assert(sizeof(SavedVideoSettings) == 164, "Saved settings ABI");
 
 static wchar_t settings_path[PATH_CAPACITY];
 static int import_legacy, import_placement, import_livery;
@@ -47,6 +58,10 @@ static int valid_value(unsigned index, int value) {
     if (index >= VIDEO_SETTING_COUNT || value < 0) {
         return 0;
     }
+    if (index == MASTER_VOLUME) {
+        return value <= 100;
+    }
+    if (index == POWER_UNITS || index == SPRING_UNITS) return value <= 3;
     if (index == DRIFT_MODE) {
         return value <= DRIFT_OFF;
     }
@@ -59,6 +74,7 @@ static int valid_value(unsigned index, int value) {
     if (retired_setting(index)) {
         return value <= 3;
     }
+    if (index == PLAYER_CHARACTER) return 1;
     if (index == REALTIME_SHADOWS) {
         return value <= SHADOWS_ON;
     }
@@ -134,7 +150,8 @@ static void save_settings(void) {
 }
 
 void video_settings_load(const wchar_t *directory) {
-    settings = defaults;
+    memory_copy(&settings, &defaults, sizeof(settings));
+    display_units_refresh();
     import_legacy = import_placement = import_livery = 1;
     settings_path[0] = 0;
     if (!directory || !path_join(settings_path, directory, L"FH2_ExtraOptions.dat")) {
@@ -145,7 +162,8 @@ void video_settings_load(const wchar_t *directory) {
     if (file == INVALID_HANDLE_VALUE) {
         return;
     }
-    SavedVideoSettings saved = defaults;
+    SavedVideoSettings saved;
+    memory_copy(&saved, &defaults, sizeof(saved));
     LARGE_INTEGER size;
     DWORD read = 0;
 
@@ -160,6 +178,17 @@ void video_settings_load(const wchar_t *directory) {
         {92, LIVERY_RESOLUTION},
         {92, LIVERY_RESOLUTION},
         {92, LIVERY_RESOLUTION},
+        {104, SHOW_ALL_EVENTS},
+        {108, AUTODRIVE_EVENTS},
+        {112, CUSTOM_SHOWCASES},
+        {116, BEN_PHOTO_DIALOGUE},
+        {132, MASTER_VOLUME},
+        {136, OPEN_WORLD_DRIVATARS},
+        {140, SKILL_POINT_NOTIFICATION},
+        {144, POWER_UNITS},
+        {152, SKILL_COUNTER_SHAKE},
+        {156, PLAYER_CHARACTER},
+        {160, SPEED_ZONE_VIGNETTE},
         {sizeof(SavedVideoSettings), VIDEO_SETTING_COUNT},
     };
 
@@ -201,15 +230,22 @@ void video_settings_load(const wchar_t *directory) {
             }
         }
         saved.values[RESERVED_FILTERING_SLOT] = saved.values[RESERVED_MOTION_SLOT] = 0;
-        settings = saved;
+        memory_copy(&settings, &saved, sizeof(settings));
+        display_units_refresh();
         if ((driver_migration || shadow_migration) && !import_legacy && !import_placement) {
             save_settings();
         }
     }
 }
 
+static unsigned char hidden[VIDEO_SETTING_COUNT];
+
 int video_setting_get(unsigned index) {
-    return index < VIDEO_SETTING_COUNT ? settings.values[index] : 0;
+    if (index >= VIDEO_SETTING_COUNT) {
+        return 0;
+    }
+    // a 0.3.9 setting switched off in the INI acts as its default: the game's own behaviour
+    return index >= SHOW_ALL_EVENTS && hidden[index] ? defaults.values[index] : settings.values[index];
 }
 
 int video_setting_set(unsigned index, int value) {
@@ -220,13 +256,19 @@ int video_setting_set(unsigned index, int value) {
     if (index >= MINIMAP_ORIENTATION && index <= CAR_CHANGE_POSITION) {
         video_settings_refresh_hud();
     }
+    if (index == MASTER_VOLUME) {
+        audio_volume_refresh();
+    }
+    if (index == POWER_UNITS || index == SPRING_UNITS) display_units_refresh();
     save_settings();
     return 1;
 }
 
 void video_settings_reset(void) {
-    settings = defaults;
+    memory_copy(&settings, &defaults, sizeof(settings));
     video_settings_refresh_hud();
+    audio_volume_refresh();
+    display_units_refresh();
     save_settings();
 }
 
@@ -275,8 +317,6 @@ void video_settings_seed(const ModOptions *legacy) {
     save_settings();
 }
 
-static unsigned char hidden[VIDEO_SETTING_COUNT];
-
 void video_settings_show_features(const ModOptions *options) {
     for (unsigned index = 0; index < VIDEO_SETTING_COUNT; ++index) {
         int shown = index < DRIFT_SETTING_COUNT    ? options->drift_camera
@@ -288,8 +328,21 @@ void video_settings_show_features(const ModOptions *options) {
                     : index == SKIP_CHAMPIONSHIP_DIALOGUE ? options->car_dialogue_option
                     : index == SPAWN_LOCATION       ? options->startup_location_option
                     : index == CAR_CHANGE_POSITION  ? options->car_position_option && options->garage_from_pause
-                    : index >= LIVERY_RESOLUTION    ? options->livery_option
-                                                    : 1;
+                    : index >= LIVERY_RESOLUTION && index <= LIVERY_SAMPLING ? options->livery_option
+                    : index == SHOW_ALL_EVENTS      ? options->show_all_races_option
+                    : index == AUTODRIVE_EVENTS     ? options->autodrive
+                    : index == CUSTOM_SHOWCASES     ? options->custom_showcases_option
+                    : index == BEN_PHOTO_DIALOGUE || index == ASHLEY_GARAGE_DIALOGUE ? options->dialogue_option
+                    : index == CHECKPOINT_SOUND     ? options->checkpoint_sound_option
+                    : index == MASTER_VOLUME        ? options->master_volume_option
+                    : index == OPEN_WORLD_DRIVATARS ? options->freeroam_drivatars_option
+                    : index == POWER_UNITS || index == SPRING_UNITS ? options->display_units_option
+                    : index == PLAYER_CHARACTER     ? options->player_character_option
+                    : index == SPEED_ZONE_VIGNETTE  ? options->speed_zone_vignette_option
+                    : index == WHEELSPIN_NOTIFICATION || index == SKILL_POINT_NOTIFICATION ||
+                              index == SKILL_COUNTER_SHAKE
+                        ? options->notifications_option
+                        : 1;
         hidden[index] = !shown;
     }
 }
@@ -313,13 +366,24 @@ void video_settings_apply(ModOptions *options) {
 }
 
 void video_settings_refresh_hud(void) {
+    display_units_refresh();
     minimap_set_follow_camera(settings.values[MINIMAP_ORIENTATION]);
     autodrive_set_cinematic(settings.values[AUTODRIVE_CINEMATIC]);
     road_set_enabled(settings.values[CAR_CHANGE_POSITION] == CAR_POSITION_NEAREST_ROAD);
 }
 
 unsigned video_setting_page(unsigned index) {
-    return index < CAMERA_SETTING_COUNT ||
+    if (index == OPEN_WORLD_DRIVATARS) {
+        return DIFFICULTY_PAGE;
+    }
+    if (index == BEN_PHOTO_DIALOGUE || index == ASHLEY_GARAGE_DIALOGUE ||
+        index == CHECKPOINT_SOUND || index == MASTER_VOLUME) {
+        return AUDIO_PAGE;
+    }
+    return index == SHOW_ALL_EVENTS || index == AUTODRIVE_EVENTS || index == CUSTOM_SHOWCASES ||
+                   index == WHEELSPIN_NOTIFICATION || index == SKILL_POINT_NOTIFICATION ||
+                   index == POWER_UNITS || index == SPRING_UNITS || index == SKILL_COUNTER_SHAKE || index == PLAYER_CHARACTER || index == SPEED_ZONE_VIGNETTE ||
+                   index < CAMERA_SETTING_COUNT ||
                    (index >= MINIMAP_ORIENTATION && index <= CAR_CHANGE_POSITION)
                ? HUD_PAGE
                : VIDEO_PAGE;
@@ -333,6 +397,8 @@ void video_settings_reset_page(unsigned page) {
     }
     if (page == HUD_PAGE) {
         video_settings_refresh_hud();
+    } else if (page == AUDIO_PAGE) {
+        audio_volume_refresh();
     }
     save_settings();
 }
@@ -356,7 +422,8 @@ float camera_fov_default(unsigned view) {
 
 int drift_view_enabled(unsigned view) {
     int mode = settings.values[DRIFT_MODE];
-    return mode == DRIFT_ON || (mode == DRIFT_DRIVER_ONLY && view >= CAMERA_DRIVER);
+    return (mode == DRIFT_ON && view >= CAMERA_CHASE && view <= CAMERA_DRIVER) ||
+           (mode == DRIFT_DRIVER_ONLY && view == CAMERA_DRIVER);
 }
 
 float drift_look_speed(unsigned view) {

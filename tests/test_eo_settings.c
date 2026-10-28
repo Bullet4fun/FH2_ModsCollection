@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+// bindings.c reads input through these; parsing the INI never calls them
+int game_key_down(unsigned key) { (void)key; return 0; }
+int game_triggers_down(unsigned triggers) { (void)triggers; return 0; }
+
 static int fails;
 #define CHECK(c, m) do { if (!(c)) { printf("FAIL: %s\n", m); fails++; } } while (0)
 
@@ -32,12 +36,12 @@ int main(void) {
     CHECK(options.drift_camera && options.field_of_view && options.return_to_garage && options.in_game_options &&
               options.minimap_rotation && options.sun_shadows_option,
           "every new switch outside [Vehicle] defaults on");
-    CHECK(!options.headlights_toggle && !options.roof_toggle && !options.turn_signals && !options.aero_tuning,
+    CHECK(!options.headlights_toggle && !options.roof_toggle && !options.turn_signals && !options.unlock_aero_tuning,
           "the supplied INI ships [Vehicle] off");
 
     write_ini(dir, "[Vehicle]\nRoofToggle=1\n[Graphics]\nSunShadows=0\n[Frontend]\nStartupLocation=0\n");
     CHECK(settings_read(dir, &options) && options.roof_toggle && !options.headlights_toggle && !options.turn_signals &&
-              !options.aero_tuning,
+              !options.unlock_aero_tuning,
           "[Vehicle] RoofToggle=1; a missing key stays off");
     options.smooth_sun_shadows = 1; // as the in-game menu would set them
     options.skip_car_meet_on_startup = options.spawn_at_festival = 1;

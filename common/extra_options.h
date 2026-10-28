@@ -6,7 +6,7 @@
 #include <windows.h>
 
 #define MOD_NAME "Forza Horizon 2 Extra Options"
-#define MOD_VERSION "0.2.98"
+#define MOD_VERSION "0.3.9"
 #define MOD_INI_NAME L"FH2_ExtraOptions.ini"
 #define MOD_LOG_NAME L"FH2_ExtraOptions.log"
 #define GAME_EXE_NAME L"forza_durango_release_final.exe"
@@ -27,7 +27,6 @@ typedef enum {
     GROUP_ROAD,
     GROUP_ISLAND_CARS,
     GROUP_PARENTAL,
-    GROUP_GAMERPIC,
     GROUP_PHOTO_CAMERA,
     GROUP_TREASURE_MAP,
     GROUP_AUTODRIVE,
@@ -47,7 +46,9 @@ typedef enum {
     GROUP_VEHICLE_CONTROLS,
     GROUP_AERO_TUNING,
     GROUP_TURN_SIGNALS,
-    GROUP_RETURN_GARAGE
+    GROUP_RETURN_GARAGE,
+    GROUP_ADDONS,
+    GROUP_ENGINE_SWAPS
 } PatchGroup;
 
 typedef struct {
@@ -74,7 +75,6 @@ typedef struct {
     int snap_car_to_road;
     int unlock_storm_island_cars;
     int disable_parental_locks;
-    int custom_gamerpic;
     int free_photo_camera;
     int unlock_treasure_map;
     int autodrive;
@@ -99,7 +99,6 @@ typedef struct {
     int headlights_toggle;
     int roof_toggle;
     int turn_signals;
-    int aero_tuning;
     /* INI switches over options set in the game's menus (FH2_ExtraOptions.dat): 0 keeps the
        feature off whatever the menu says */
     int sun_shadows_option;
@@ -109,5 +108,23 @@ typedef struct {
     int car_dialogue_option;
     int car_position_option;
     int enable_social, enable_clubs, enable_rivals;
+    int unlock_aero_tuning;
+    int all_engine_swaps;
+    int cars_next_to_home;
+    int local_drivatar_liveries;
+    int max_drivatar_liveries;
+    int menu_turbo_interval_ms;
+    int all_transmission_swaps;
+    /* INI switches over 0.3.9's in-game settings: 0 hides them, the game keeps its own behaviour */
+    int show_all_races_option;
+    int custom_showcases_option;
+    int dialogue_option;
+    int checkpoint_sound_option;
+    int master_volume_option;
+    int notifications_option;
+    int display_units_option;
+    int player_character_option;
+    int speed_zone_vignette_option;
+    int freeroam_drivatars_option;
 } ModOptions;
 #endif

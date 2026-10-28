@@ -1,9 +1,9 @@
-/* Spotify radio mod (data\bin\mods\FH2_SpotifyRadio.dll): Spotify Connect (librespot) plays as the
+/* Spotify radio mod (mods\FH2_SpotifyRadio.dll): Spotify Connect (librespot) plays as the
    game's own "Xbox Music" station, with Now Playing on the radio HUD. No settings. Its folder
    mods\FH2_SpotifyRadio\ holds the log, librespot.exe, onevent.cmd and librespot's files (Spotify
    login, volume, nowplaying.txt). */
 #include "track_controls.h"
-#include "fh2_mod.h"
+#include "azimuth_mod.h"
 #include "spotify_bridge.h"
 #include "logging.h"
 #include "mod_log.h"
@@ -13,7 +13,7 @@
 #define SPOTIFY_VERSION "dev" // build.py passes the release version
 #endif
 
-// No FH2_MOD_GAMES: an undeclared mod counts as Forza Horizon 2 only, which is what this one is (every
+// No AZIMUTH_MOD_GAMES: an undeclared mod counts as Forza Horizon 2 only, which is what this one is (every
 // hook is an FH2 address), so the loader never loads it into Fast & Furious. An explicit declaration
 // or a host->game check makes one antivirus ML engine flag the DLL.
 
@@ -37,7 +37,7 @@ static wchar_t logo_previous[PATH_CAPACITY];
 /* Copies the mod's logo into Mount\spotifyradio\, a folder only this mod uses, as the Xbox Music
    station's HUD icon; the mod mounts that folder into the game's files itself. A logo this mod placed
    somewhere else last time (logo_installed.txt) is removed. 1: the logo is in place. */
-static int install_logo(const FH2ModHost *host) {
+static int install_logo(const AzimuthModHost *host) {
     if (!path_join(logo_source, host->data_dir, L"HUD_RadioIcon_Spotify.swatchbin") ||
         !path_join(logo_record, host->data_dir, L"logo_installed.txt") ||
         GetFileAttributesW(logo_source) == INVALID_FILE_ATTRIBUTES) {
@@ -96,8 +96,8 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     return TRUE;
 }
 
-__declspec(dllexport) int FH2ModLoad(const FH2ModHost *host) {
-    if (!host || host->size < sizeof(*host) || host->api_version != FH2_MOD_API_VERSION || !host->game_image) {
+__declspec(dllexport) int AzimuthModLoad(const AzimuthModHost *host) {
+    if (!host || host->size < sizeof(*host) || host->api_version != AZIMUTH_MOD_API_VERSION || !host->game_image) {
         return 0;
     }
     CreateDirectoryW(host->data_dir, NULL); // fails harmlessly if it exists

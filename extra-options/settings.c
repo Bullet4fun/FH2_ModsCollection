@@ -1,6 +1,7 @@
 #include "settings.h"
 #include "features.h"
 #include "support.h"
+#include "features/bindings.h"
 
 #define INI_MAX_SIZE 32768
 #define SETTING(section, key, field, type) {section, key, key, offsetof(ModOptions, field), type}
@@ -9,8 +10,14 @@ const SettingDefinition setting_definitions[] = {
     SETTING("Global", "Enabled", enabled, SETTING_BOOLEAN),
     SETTING("Content", "UnlockDLC", unlock_dlc, SETTING_BOOLEAN),
     SETTING("Content", "OfflineVIP", offline_vip, SETTING_BOOLEAN),
+    SETTING("Experiments", "LocalDrivatarLiveries", local_drivatar_liveries, SETTING_BOOLEAN),
+    SETTING("Experiments", "MaxDrivatarLiveries", max_drivatar_liveries, SETTING_LIVERY_COUNT),
     SETTING("Frontend", "SkipIntro", skip_intro, SETTING_BOOLEAN),
+    SETTING("Frontend", "CarsNextToHome", cars_next_to_home, SETTING_BOOLEAN),
+    SETTING("Frontend", "MenuTurboIntervalMs", menu_turbo_interval_ms, SETTING_TURBO_INTERVAL),
     SETTING("Frontend", "AllRimsCategory", all_rims_category, SETTING_BOOLEAN),
+    SETTING("Experiments", "AllEngineSwaps", all_engine_swaps, SETTING_BOOLEAN),
+    SETTING("Experiments", "AllTransmissionSwaps", all_transmission_swaps, SETTING_BOOLEAN),
     SETTING("Frontend", "EnableMarketplace", enable_marketplace, SETTING_BOOLEAN),
     SETTING("Frontend", "EnableSocial", enable_social, SETTING_BOOLEAN),
     SETTING("Frontend", "EnableClubs", enable_clubs, SETTING_BOOLEAN),
@@ -21,9 +28,9 @@ const SettingDefinition setting_definitions[] = {
     SETTING("Compatibility", "DisableParentalLocks", disable_parental_locks, SETTING_BOOLEAN),
     SETTING("Compatibility", "DisableAzimuthSaveChecksums", disable_azimuth_save_checksums,
             SETTING_BOOLEAN),
-    SETTING("Profile", "CustomGamerpic", custom_gamerpic, SETTING_BOOLEAN),
     SETTING("PhotoMode", "FreeCamera", free_photo_camera, SETTING_BOOLEAN),
     SETTING("Files", "EnableMediaOverrides", media_overrides, SETTING_BOOLEAN),
+    SETTING("Experiments", "UnlockAeroTuning", unlock_aero_tuning, SETTING_BOOLEAN),
     {"Autodrive", "Enabled", "AutodriveEnabled", offsetof(ModOptions, autodrive), SETTING_BOOLEAN},
     SETTING("Frontend", "ReturnToGarage", return_to_garage, SETTING_BOOLEAN),
     SETTING("Frontend", "InGameOptions", in_game_options, SETTING_BOOLEAN),
@@ -33,16 +40,28 @@ const SettingDefinition setting_definitions[] = {
     SETTING("Vehicle", "HeadlightsToggle", headlights_toggle, SETTING_BOOLEAN),
     SETTING("Vehicle", "RoofToggle", roof_toggle, SETTING_BOOLEAN),
     SETTING("Vehicle", "TurnSignals", turn_signals, SETTING_BOOLEAN),
-    SETTING("Vehicle", "AeroTuning", aero_tuning, SETTING_BOOLEAN),
     SETTING("Graphics", "SunShadows", sun_shadows_option, SETTING_BOOLEAN),
     SETTING("Livery", "EnhancedLiveries", livery_option, SETTING_BOOLEAN),
     SETTING("PhotoMode", "Supersampling", photo_supersampling_option, SETTING_BOOLEAN),
     SETTING("Frontend", "StartupLocation", startup_location_option, SETTING_BOOLEAN),
     SETTING("Frontend", "IneligibleCarDialogueSkip", car_dialogue_option, SETTING_BOOLEAN),
     SETTING("Frontend", "CarChangePosition", car_position_option, SETTING_BOOLEAN),
+    SETTING("Frontend", "ShowAllRaces", show_all_races_option, SETTING_BOOLEAN),
+    SETTING("Frontend", "CustomShowcases", custom_showcases_option, SETTING_BOOLEAN),
+    SETTING("Frontend", "FreeRoamDrivatars", freeroam_drivatars_option, SETTING_BOOLEAN),
+    SETTING("Frontend", "PlayerCharacter", player_character_option, SETTING_BOOLEAN),
+    SETTING("Audio", "Dialogue", dialogue_option, SETTING_BOOLEAN),
+    SETTING("Audio", "CheckpointSound", checkpoint_sound_option, SETTING_BOOLEAN),
+    SETTING("Audio", "MasterVolume", master_volume_option, SETTING_BOOLEAN),
+    SETTING("HUD", "Notifications", notifications_option, SETTING_BOOLEAN),
+    SETTING("HUD", "DisplayUnits", display_units_option, SETTING_BOOLEAN),
+    SETTING("HUD", "SpeedZoneVignette", speed_zone_vignette_option, SETTING_BOOLEAN),
 };
 
 static const SettingDefinition legacy_settings[] = {
+    SETTING("Frontend", "AllEngineSwaps", all_engine_swaps, SETTING_BOOLEAN),
+    SETTING("Gameplay", "UnlockAeroTuning", unlock_aero_tuning, SETTING_BOOLEAN),
+    SETTING("Vehicle", "AeroTuning", unlock_aero_tuning, SETTING_BOOLEAN),
     SETTING("Livery", "Enable4K", enable_4k_liveries, SETTING_BOOLEAN),
     SETTING("Livery", "IntermediateMSAA", livery_msaa, SETTING_MSAA),
     SETTING("Livery", "ExtraSupersampling", livery_supersampling, SETTING_BOOLEAN),
@@ -75,7 +94,6 @@ void settings_defaults(ModOptions *options) {
         .snap_car_to_road = 1,
         .unlock_storm_island_cars = 1,
         .disable_parental_locks = 1,
-        .custom_gamerpic = 1,
         .free_photo_camera = 1,
         .unlock_treasure_map = 0,
         .autodrive = 0,
@@ -88,6 +106,12 @@ void settings_defaults(ModOptions *options) {
         .spawn_at_festival = 0,
         .skip_car_meet_on_startup = 0,
         .all_rims_category = 0,
+        .all_engine_swaps = 0,
+        .all_transmission_swaps = 0,
+        .cars_next_to_home = 1,
+        .local_drivatar_liveries = 1,
+        .max_drivatar_liveries = 6,
+        .menu_turbo_interval_ms = 100,
         .drift_camera = 1,
         .enable_social = 1,
         .enable_clubs = 1,
@@ -100,13 +124,23 @@ void settings_defaults(ModOptions *options) {
         .headlights_toggle = 0, // [Vehicle]: off unless the INI turns it on
         .roof_toggle = 0,
         .turn_signals = 0,
-        .aero_tuning = 0,
         .sun_shadows_option = 1,
         .livery_option = 1,
         .photo_supersampling_option = 1,
         .startup_location_option = 1,
         .car_dialogue_option = 1,
         .car_position_option = 1,
+        .show_all_races_option = 1,
+        .custom_showcases_option = 1,
+        .dialogue_option = 1,
+        .checkpoint_sound_option = 1,
+        .master_volume_option = 1,
+        .notifications_option = 1,
+        .display_units_option = 1,
+        .player_character_option = 1,
+        .speed_zone_vignette_option = 1,
+        .freeroam_drivatars_option = 1,
+        .unlock_aero_tuning = 0,
     };
 }
 
@@ -155,9 +189,11 @@ static char *trim_whitespace(char *text) {
 }
 
 static int known_section(const char *name) {
-    if (text_equal_ignore_case(name, "Camera") || text_equal_ignore_case(name, "Graphics") ||
-        text_equal_ignore_case(name, "Livery") || text_equal_ignore_case(name, "HUD") ||
-        text_equal_ignore_case(name, "General") || text_equal_ignore_case(name, "Language")) {
+    if (text_equal_ignore_case(name, "Gameplay") || text_equal_ignore_case(name, "Camera") ||
+        text_equal_ignore_case(name, "Graphics") || text_equal_ignore_case(name, "Livery") ||
+        text_equal_ignore_case(name, "HUD") || text_equal_ignore_case(name, "Bindings") ||
+        text_equal_ignore_case(name, "General") || text_equal_ignore_case(name, "Language") ||
+        text_equal_ignore_case(name, "Profile")) {
         return 1;
     }
     for (size_t index = 0; index < setting_count; ++index) {
@@ -190,6 +226,28 @@ static const SettingDefinition *find_setting(const char *section, const char *ke
 }
 
 static int parse_value(const SettingDefinition *definition, const char *text, int *value) {
+    if (definition->type == SETTING_TURBO_INTERVAL) {
+        unsigned interval = 0;
+        if (!*text) return 0;
+        for (; *text; ++text) {
+            if (*text < '0' || *text > '9' || interval > 1000) return 0;
+            interval = interval * 10 + (unsigned)(*text - '0');
+        }
+        if (interval > 1000 || (interval && interval < 20)) return 0;
+        *value = (int)interval;
+        return 1;
+    }
+    if (definition->type == SETTING_LIVERY_COUNT) {
+        unsigned count = 0;
+        if (!*text) return 0;
+        for (; *text; ++text) {
+            if (*text < '0' || *text > '9' || count > 32) return 0;
+            count = count * 10 + (unsigned)(*text - '0');
+        }
+        if (count > 32) return 0;
+        *value = (int)count;
+        return 1;
+    }
     if (definition->type == SETTING_PHOTO_SAMPLES) {
         unsigned samples = 0;
         if (!*text) {
@@ -289,7 +347,8 @@ static int parse_ini(char *text, ModOptions *options) {
         }
 
         // Retired keys are ignored so an older INI still loads.
-        if ((text_equal_ignore_case(section, "Language") &&
+        if ((text_equal_ignore_case(section, "Profile") && text_equal_ignore_case(key, "CustomGamerpic")) ||
+        (text_equal_ignore_case(section, "Language") &&
              (text_equal_ignore_case(key, "Text") || text_equal_ignore_case(key, "Audio"))) ||
             (text_equal_ignore_case(section, "Graphics") &&
              (text_equal_ignore_case(key, "ForceAnisoFiltering") ||
@@ -303,6 +362,12 @@ static int parse_ini(char *text, ModOptions *options) {
             continue;
         }
 
+        if (text_equal_ignore_case(section, "Bindings")) {
+            if (bindings_parse(key, value) != 1) {
+                goto invalid;
+            }
+            continue;
+        }
         const SettingDefinition *definition = find_setting(section, key);
         int parsed;
         if (!definition || !parse_value(definition, value, &parsed)) {
@@ -320,6 +385,7 @@ invalid:
 }
 
 int settings_read(const wchar_t *directory, ModOptions *options) {
+    bindings_reset();
     settings_defaults(options);
     if (!path_join(ini_path, directory, MOD_INI_NAME)) {
         status_set("REFUSED: INI path is too long.");

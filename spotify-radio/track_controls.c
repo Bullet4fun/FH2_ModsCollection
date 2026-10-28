@@ -22,7 +22,7 @@ static const char *const ini_keys[TRACK_COMMANDS][2] = {
 
 static const char default_ini[] =
     "// FH2 Spotify Radio by Bullet4fun: https://github.com/Bullet4fun/FH2_ModsCollection\r\n"
-    "// Works with Azimuth 0.9.10; other Azimuth versions are untested.\r\n"
+    "// Works with Azimuth 1.0.3 and the Azimuth Mod Loader; other Azimuth versions are untested.\r\n"
     "//\r\n"
     "// Read at game startup. A key left out keeps its default; an empty value turns a button off.\r\n"
     "// The track buttons work only while Spotify Radio is playing in the car.\r\n"
@@ -31,7 +31,7 @@ static const char default_ini[] =
     "//   LS LS    tap it twice\r\n"
     "//   LS+RB    press them together (the game sees both buttons too)\r\n"
     "// Keyboard: F1-F12, A-Z, 0-9\r\n"
-    "// Extra Options uses the D-pad and RS: pick other buttons.\r\n"
+    "// Extra Options uses the D-pad, RS, X, Y, View and F1-F4 by default (its [Bindings]): pick other buttons.\r\n"
     "\r\n"
     "[Controls]\r\n"
     "NextTrack = LS             // Next track, gamepad. (Default = LS)\r\n"

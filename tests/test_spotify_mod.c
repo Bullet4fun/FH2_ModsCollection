@@ -19,7 +19,7 @@ int main(void) {
     CreateDirectoryW(root, NULL);
     swprintf(f, MAX_PATH, L"%ls\\mods", root); CreateDirectoryW(f, NULL); CreateDirectoryW(data, NULL);
     swprintf(f, MAX_PATH, L"%ls\\Mount", root); CreateDirectoryW(f, NULL);
-    FH2ModHost host = {sizeof(host), FH2_MOD_API_VERSION, NULL, exe, root, root, data, FH2_GAME_FORZA_HORIZON_2};
+    AzimuthModHost host = {sizeof(host), AZIMUTH_MOD_API_VERSION, NULL, exe, root, data, AZIMUTH_GAME_FORZA_HORIZON_2};
 #define AT(dir, name) (swprintf(f, MAX_PATH, L"%ls%ls", dir, name), f)
 #define EXISTS(dir, name) (GetFileAttributesW(AT(dir, name)) != INVALID_FILE_ATTRIBUTES)
     CHECK(!install_logo(&host) && !EXISTS(hud, L"HUD_RadioIcon_Xbox_Music.swatchbin"), "no logo file: nothing placed");

@@ -5,7 +5,7 @@ stations: in the car, at car meets and from the festival speakers. The radio HUD
 
 ## Install
 
-Unzip `FH2_SpotifyRadio.zip` into `data\bin\`. librespot needs the
+Unzip `FH2_SpotifyRadio.zip` into the Azimuth folder (where `azimuth.exe` is). librespot needs the
 [VC++ 2015-2022 x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 
 ## Use
@@ -18,9 +18,9 @@ tune the car radio to Spotify Radio.
 
 While Spotify Radio plays: tap the left stick for the next track, tap it twice for the previous one
 (F6 and F5 on the keyboard, F7 play/pause). Change the buttons in
-`data\bin\mods\FH2_SpotifyRadio\FH2_SpotifyRadio.ini`; it explains itself.
+`mods\FH2_SpotifyRadio\FH2_SpotifyRadio.ini`; it explains itself.
 
-Your Spotify login is saved in `data\bin\mods\FH2_SpotifyRadio\credentials.json`. Never share that
+Your Spotify login is saved in `mods\FH2_SpotifyRadio\credentials.json`. Never share that
 file.
 
 ## Linux (Proton)

@@ -14,7 +14,7 @@ TESTS = [  # (source, extra sources)
     ("tests/test_spotify_mod.c", SPOTIFY + ["common/mod_log.c"]),
     ("tests/test_track_controls.c", ["common/support.c", "common/mod_log.c"]),
     ("tests/test_mod_log.c", ["common/support.c", "common/mod_log.c"]),
-    ("tests/test_eo_settings.c", ["common/support.c"]),
+    ("tests/test_eo_settings.c", ["common/support.c", "extra-options/features/bindings.c"]),
     ("tests/test_discord_rpc.c", ["common/support.c", "-lws2_32"]),
 ]
 

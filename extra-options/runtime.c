@@ -1,5 +1,7 @@
 #include "runtime.h"
 #include "features.h"
+#include "features/addons.h"
+#include "features/plugins.h"
 #include "features/video_settings.h"
 #include "logging.h"
 #include "patch_engine.h"
@@ -14,7 +16,7 @@ int runtime_initialize(unsigned char *game_image, const wchar_t *executable_path
                        const wchar_t *settings_directory) {
     ModOptions options;
     settings_defaults(&options);
-    gamerpic_set_directory(settings_directory);
+    addons_configure(executable_path);
     log_reset();
     int initialized = settings_read(settings_directory, &options);
     if (initialized) {
@@ -27,6 +29,7 @@ int runtime_initialize(unsigned char *game_image, const wchar_t *executable_path
     if (initialized && options.enabled) {
         initialized = verify_game_file(executable_path);
     }
+    plugins_configure(game_image, executable_path, initialized && options.enabled);
     if (initialized) {
         initialized = patch_engine_apply(game_image, &options);
     }
