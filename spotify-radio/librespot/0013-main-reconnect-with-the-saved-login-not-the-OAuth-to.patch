@@ -1,0 +1,32 @@
+From 6d3d15e7bc67651e78522d16c06b9c2da7222c02 Mon Sep 17 00:00:00 2001
+From: Bullet4fun <68350015+Bullet4fun@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 22:24:53 +0200
+Subject: [PATCH] main: reconnect with the saved login, not the OAuth token
+
+A session that started with the browser sign-in kept the OAuth access
+token as its credentials. The token expires after about an hour, so the
+first reconnect after Spotify dropped the connection failed with
+"Bad credentials" and librespot exited. The reusable login the first
+connect stored in the cache is used instead.
+---
+ src/main.rs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/main.rs b/src/main.rs
+index 418055f..0346769 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -2136,6 +2136,10 @@ async fn main() {
+ 
+                 if last_credentials.is_some() && !reconnect_exceeds_rate_limit() {
+                     auto_connect_times.push(Instant::now());
++                    // an OAuth access token expires after about an hour: reconnect with the login the first connect saved
++                    if let Some(saved) = setup.cache.as_ref().and_then(|cache| cache.credentials()) {
++                        last_credentials = Some(saved);
++                    }
+                     if !session.is_invalid() {
+                         session.shutdown();
+                     }
+-- 
+2.42.0.windows.2
+

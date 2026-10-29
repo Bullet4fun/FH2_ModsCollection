@@ -1,0 +1,3 @@
+LIBRARY mfreadwrite.dll
+EXPORTS
+    MFCreateSourceReaderFromURL

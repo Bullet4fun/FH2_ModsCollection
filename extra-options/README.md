@@ -52,7 +52,7 @@ section of `mods\FH2_ExtraOptions\FH2_ExtraOptions.ini`.
 Some cars have glitched turn signals or roofs: see the original mod's
 [wiki](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions/wiki/4.-Oddities).
 
-The Treasure Map is off by default: set `UnlockTreasureMap=1` in the INI.
+The Treasure Map is off by default: set `UnlockTreasureMap=1` in the config file.
 
 ## AI usage disclosure (from the original author)
 

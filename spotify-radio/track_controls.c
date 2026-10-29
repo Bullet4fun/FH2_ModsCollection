@@ -2,6 +2,17 @@
 #include "logging.h"
 #include "support.h"
 
+#define WIDE_(text) L##text
+#define WIDE(text) WIDE_(text)
+#ifdef LINE_IN_RADIO // Line-in Radio's INI: these buttons plus [Audio] Device
+#include "line_in_capture.h"
+#define RADIO_INI "FH2_LineInRadio.ini"
+#define RADIO_LOG "LINE-IN: "
+#else
+#define RADIO_INI "FH2_SpotifyRadio.ini"
+#define RADIO_LOG "SPOTIFY: "
+#endif
+
 static unsigned double_tap_ms = 200; // [Controls] DoubleTapTime
 
 TrackBinding track_bindings[TRACK_COMMANDS][2];
@@ -21,11 +32,23 @@ static const char *const ini_keys[TRACK_COMMANDS][2] = {
 };
 
 static const char default_ini[] =
+#ifdef LINE_IN_RADIO
+    "// FH2 Line-in Radio by Bullet4fun: https://github.com/Bullet4fun/FH2_ModsCollection\r\n"
+    "// Works with Azimuth 1.0.3 and the Azimuth Mod Loader; other Azimuth versions are untested.\r\n"
+    "//\r\n"
+    "// Read at game startup. A key left out keeps its default; an empty value turns a button off.\r\n"
+    "// What the radio plays (the Songs folder beside this file, or a sound device such as a virtual\r\n"
+    "// cable) and Shuffle are picked in the game: Settings > Audio, under Radio Volume.\r\n"
+    "// The track buttons work only while Line-in Radio is playing in the car: with Songs they control\r\n"
+    "// the mod's own player, with a device they go to the player playing into it.\r\n"
+    "\r\n"
+#else
     "// FH2 Spotify Radio by Bullet4fun: https://github.com/Bullet4fun/FH2_ModsCollection\r\n"
     "// Works with Azimuth 1.0.3 and the Azimuth Mod Loader; other Azimuth versions are untested.\r\n"
     "//\r\n"
     "// Read at game startup. A key left out keeps its default; an empty value turns a button off.\r\n"
     "// The track buttons work only while Spotify Radio is playing in the car.\r\n"
+#endif
     "// Gamepad: A B X Y LB RB LS RS View Menu Up Down Left Right\r\n"
     "//   LS       tap the left stick\r\n"
     "//   LS LS    tap it twice\r\n"
@@ -206,6 +229,9 @@ static char ini_text[4096];
 
 static void parse_ini(void) {
     int in_controls = 0;
+#ifdef LINE_IN_RADIO
+    int in_audio = 0, source_given = 0;
+#endif
     char *line = ini_text;
     while (*line) {
         char *end = line;
@@ -219,6 +245,30 @@ static void parse_ini(void) {
         while (*line == ' ' || *line == '\t') ++line;
         if (*line == '[') {
             in_controls = equal_n(line, text_length(line), "[Controls]");
+#ifdef LINE_IN_RADIO
+            in_audio = equal_n(line, text_length(line), "[Audio]");
+        } else if (in_audio && *line) {
+            char *eq = line;
+            while (*eq && *eq != '=') ++eq;
+            char *key_end = eq;
+            while (key_end > line && (key_end[-1] == ' ' || key_end[-1] == '\t')) --key_end;
+            const char *value = eq + (*eq != 0);
+            while (*value == ' ' || *value == '\t') ++value;
+            size_t key = (size_t)(key_end - line), length = text_length(value);
+            if (*eq && equal_n(line, key, "Device")) {
+                size_t n = 0;
+                for (; value[n] && n < sizeof(line_in_device) - 1; ++n) line_in_device[n] = value[n];
+                line_in_device[n] = 0;
+            } else if (*eq && equal_n(line, key, "Source")) {
+                source_given = 1;
+                line_in_use_songs = !equal_n(value, length, "Device");
+                if (line_in_use_songs && !equal_n(value, length, "Songs")) {
+                    log_append(RADIO_LOG RADIO_INI ": Source must be Songs or Device; Songs is used.\r\n");
+                }
+            } else if (*eq && equal_n(line, key, "Shuffle")) {
+                line_in_shuffle = !equal_n(value, length, "0");
+            }
+#endif
         } else if (in_controls && *line && *line != ';') {
             char *eq = line;
             while (*eq && *eq != '=') ++eq;
@@ -232,7 +282,7 @@ static void parse_ini(void) {
                 if (ms >= 100 && ms <= 600) {
                     double_tap_ms = ms;
                 } else {
-                    log_append("SPOTIFY: FH2_SpotifyRadio.ini: DoubleTapTime must be 100-600; 200 is used.\r\n");
+                    log_append(RADIO_LOG RADIO_INI ": DoubleTapTime must be 100-600; 200 is used.\r\n");
                 }
             } else if (*eq) {
                 for (unsigned c = 1; c < TRACK_COMMANDS; ++c) {
@@ -243,14 +293,14 @@ static void parse_ini(void) {
                         TrackBinding binding;
                         if (!track_binding_parse(eq + 1, &binding) || (k == 0 && binding.key) ||
                             (k == 1 && binding.buttons)) {
-                            log_append("SPOTIFY: FH2_SpotifyRadio.ini: ");
+                            log_append(RADIO_LOG RADIO_INI ": ");
                             log_append(ini_keys[c][k]);
                             log_append(" not understood; it stays off.\r\n");
                             binding = (TrackBinding){0};
                         }
                         track_bindings[c][k] = binding;
                         if (binding.buttons & (0x000f | 0x0080)) {
-                            log_append("SPOTIFY: ");
+                            log_append(RADIO_LOG);
                             log_append(ini_keys[c][k]);
                             log_append(" uses the D-pad or RS, which Extra Options also uses.\r\n");
                         }
@@ -261,6 +311,11 @@ static void parse_ini(void) {
         *end = saved;
         line = *end ? end + 1 : end;
     }
+#ifdef LINE_IN_RADIO
+    if (!source_given && line_in_device[0]) {
+        line_in_use_songs = 0; // a config from 0.1.0 (no Source yet): its Device is what it plays
+    }
+#endif
 }
 
 void track_controls_load(const wchar_t *folder) {
@@ -270,7 +325,7 @@ void track_controls_load(const wchar_t *folder) {
         keys_were_down[c] = 0;
     }
     double_tap_ms = 200;
-    if (!path_join(path, folder, L"FH2_SpotifyRadio.ini")) {
+    if (!path_join(path, folder, WIDE(RADIO_INI))) {
         return;
     }
     HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);

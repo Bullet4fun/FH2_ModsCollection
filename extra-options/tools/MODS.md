@@ -35,7 +35,7 @@ See `MOD_DIFF.md` for output naming and advanced commands.
 Azimuth v1.0.1: put `winmm.dll` and `mods/` beside **Azimuth.exe**, not inside
 `data/bin` or the selected game folder. The selected game folder can be anywhere.
 Mezcal: put `mods/` in **Mount**, beside the game EXE and `xg.dll`.
-Keep your existing INI and settings DAT. No new INI switch is required.
+Keep your existing config file and settings DAT. No new config file switch is required.
 `Global.Enabled=0` disables the mod, including the loader.
 
 ```text
@@ -87,7 +87,7 @@ Asset priority, highest first:
 4. Original loose files and ZIP members.
 
 With addons present, the two existing override folders retain priority even
-when the INI's separate MediaOverrides switch is off. Absent files fall through
+when the config file's separate MediaOverrides switch is off. Absent files fall through
 to lower-priority mods and original assets. When the file is absent or empty,
 new folders are discovered and written in alphabetical order. Existing entries,
 comments and order are preserved; newly discovered folders are appended at the

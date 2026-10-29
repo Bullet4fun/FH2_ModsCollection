@@ -1,0 +1,8 @@
+LIBRARY combase.dll
+EXPORTS
+    RoGetActivationFactory
+    RoInitialize
+    RoUninitialize
+    WindowsCreateString
+    WindowsDeleteString
+    WindowsGetStringRawBuffer

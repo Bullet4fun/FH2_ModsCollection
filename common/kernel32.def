@@ -88,3 +88,5 @@ DeleteCriticalSection
     CompareStringOrdinal
     Sleep
     lstrcatW
+    OpenProcess
+    QueryFullProcessImageNameW

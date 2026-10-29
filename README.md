@@ -6,7 +6,8 @@ Mods for **Forza Horizon 2** on Azimuth 1.0.3 or newer. They need the
 | Mod | What it does |
 |---|---|
 | [Extra Options](extra-options/README.md) | RokkuDayo's Extra Options: car change anywhere, autodrive, drift camera, FOV, unlocks and more |
-| [Spotify Radio](spotify-radio/README.md) | Spotify as an in-game radio station |
+| [Spotify Radio](spotify-radio/README.md) | Spotify as an in-game radio station (Spotify Premium) |
+| [Line-in Radio](line-in-radio/README.md) | Your own music files, or any player through a virtual cable, as the in-game radio |
 | [Discord RPC](discord-rpc/README.md) | Discord Rich Presence |
 
 ## Install
@@ -21,6 +22,7 @@ Python 3.10+ and [Zig 0.15.2](https://ziglang.org/download/):
 ```text
 python build.py path\to\zig.exe --mod     --output FH2_ExtraOptions.dll
 python build.py path\to\zig.exe --spotify --output FH2_SpotifyRadio.dll
+python build.py path\to\zig.exe --line-in --output FH2_LineInRadio.dll
 python build.py path\to\zig.exe --discord --output FH2_DiscordRPC.dll
 python tests\run.py path\to\zig.exe
 ```

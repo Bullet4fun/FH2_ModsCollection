@@ -1,5 +1,5 @@
 """Build the mods with Zig 0.15.2, including cross-compilation on Linux.
-Usage: python build.py /path/to/zig (--mod | --spotify | --discord) [--output PATH]
+Usage: python build.py /path/to/zig (--mod | --spotify | --discord | --line-in) [--output PATH]
 The mod loader (Azimuth Mod Loader, dinput8.dll) lives in its own repo, Azimuth_ModLoader.
 """
 
@@ -83,9 +83,14 @@ COMMON_SOURCES = [
 DISCORD_SOURCES = ["discord-rpc/discord_mod.c", "discord-rpc/discord_rpc.c", "common/support.c", "common/mod_log.c"]
 SPOTIFY_SOURCES = ["spotify-radio/spotify_mod.c", "common/mod_log.c", "spotify-radio/spotify_bridge.c", "spotify-radio/track_controls.c",
                    "spotify-radio/pinyin_table.c", "spotify-radio/unidecode_table.c", "common/support.c"]
+# Line-in Radio is Spotify Radio's bridge built with LINE_IN_RADIO: a sound device instead of librespot.
+LINE_IN_SOURCES = ["line-in-radio/line_in_capture.c", "line-in-radio/line_in_songs.c", "line-in-radio/line_in_player.c",
+                   "line-in-radio/line_in_menu.c",
+                   *SPOTIFY_SOURCES]
 INCLUDE_DIRS = ["common", "sdk", "extra-options", "spotify-radio", "discord-rpc"]
 SPOTIFY_VERSION = "1.4.0"
 DISCORD_VERSION = "1.3.0"
+LINE_IN_VERSION = "1.0.0"
 
 
 def version_resource(compiler, directory, filename, description, product, version):
@@ -128,11 +133,12 @@ def parse_arguments():
                         help="Build ExtraOptions as data/bin/mods/FH2_ExtraOptions.dll for the loader")
     parser.add_argument("--discord", action="store_true", help="Build the Discord Rich Presence mod")
     parser.add_argument("--spotify", action="store_true", help="Build the Spotify radio mod")
+    parser.add_argument("--line-in", action="store_true", help="Build the Line-in radio mod")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--build-dir", type=Path)
     arguments = parser.parse_args()
-    if sum((arguments.mod, arguments.discord, arguments.spotify)) != 1:
-        parser.error("choose one of --mod, --discord, --spotify")
+    if sum((arguments.mod, arguments.discord, arguments.spotify, arguments.line_in)) != 1:
+        parser.error("choose one of --mod, --discord, --spotify, --line-in")
     return arguments
 
 
@@ -166,6 +172,8 @@ def compiler_arguments(compiler, options):
         arguments.append(f'-DSPOTIFY_VERSION="{SPOTIFY_VERSION}"')  # the log's first line
     if options.discord:
         arguments.append(f'-DDISCORD_VERSION="{DISCORD_VERSION}"')  # its line in the loader's log
+    if options.line_in:  # here, not in INCLUDE_DIRS: the command line is in the debug info, so the other DLLs stay as they were
+        arguments += ["-I", str(SOURCE / "line-in-radio"), "-DLINE_IN_RADIO=1", f'-DLINE_IN_VERSION="{LINE_IN_VERSION}"']
     return arguments
 
 
@@ -175,6 +183,8 @@ def describe(options):
         return "Spotify radio for Forza Horizon 2 (Azimuth Mod Loader mod)", "FH2 Mods Collection", SPOTIFY_VERSION
     if options.discord:
         return "Discord Rich Presence for Forza Horizon 2 (Azimuth Mod Loader mod)", "FH2 Mods Collection", DISCORD_VERSION
+    if options.line_in:
+        return "Line-in radio for Forza Horizon 2 (Azimuth Mod Loader mod)", "FH2 Mods Collection", LINE_IN_VERSION
     header = (SOURCE / "common/extra_options.h").read_text(encoding="utf-8")
     version = header.split('#define MOD_VERSION "', 1)[1].split('"', 1)[0]  # ExtraOptions' own version
     return "Forza Horizon 2 Extra Options by RokkuDayo (Azimuth Mod Loader mod)", "Forza Horizon 2 Extra Options", version
@@ -192,6 +202,8 @@ def build(compiler, output, directory, options):
         sources = DISCORD_SOURCES
     elif options.spotify:
         sources = SPOTIFY_SOURCES
+    elif options.line_in:
+        sources = LINE_IN_SOURCES
     else:  # --mod: the loader owns Azimuth's helper ABI and finds the game
         sources = [*COMMON_SOURCES, "extra-options/adapters/mod.c", *azimuth_host]
     arguments = compiler_arguments(compiler, options)
@@ -225,7 +237,10 @@ def build(compiler, output, directory, options):
     # keyboard, focus and socket calls imported by name: resolving them through GetProcAddress
     # strings looks like a hidden keylogger or backdoor to antivirus ML engines
     system_libraries = []
-    for name in ("user32", "ws2_32"):
+    # Line-in Radio: ole32 for the sound devices (WASAPI), mfplat/mfreadwrite to decode songs, shell32 for their tags,
+    # combase for the players' media sessions (WinRT)
+    line_in_libraries = ["ole32", "mfplat", "mfreadwrite", "shell32", "combase"] if options.line_in else []
+    for name in ("user32", "ws2_32", *line_in_libraries):
         system_libraries.append(f"{name}.lib")
         subprocess.run([str(compiler), "dlltool", "-m", "i386:x86-64", "-d", str(SOURCE / f"common/{name}.def"),
                         "-l", system_libraries[-1]], check=True, cwd=directory)
@@ -268,6 +283,7 @@ def main():
     compiler = options.zig.resolve()
     filename = ("FH2_ExtraOptions.dll" if options.mod
                 else "FH2_DiscordRPC.dll" if options.discord
+                else "FH2_LineInRadio.dll" if options.line_in
                 else "FH2_SpotifyRadio.dll")
     output = (options.output or SOURCE.parent / filename).resolve()
     if options.build_dir:

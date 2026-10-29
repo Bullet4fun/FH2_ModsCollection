@@ -112,7 +112,7 @@ static int pcm_read(void *data, unsigned int datalen) {
     __atomic_store_n(&g_pcm_read, read, __ATOMIC_RELEASE);
     if (underran && s_underrun_reports < 20) {
         ++s_underrun_reports;
-        log_append_value("SPOTIFY: audio gap; ms since librespot last sent audio ", (int)(now - g_last_write));
+        log_append_value("SPOTIFY: audio gap; ms since " AUDIO_SOURCE " last sent audio ", (int)(now - g_last_write));
     }
     return 0;
 }
@@ -573,7 +573,7 @@ static wchar_t s_work_dir[PATH_CAPACITY];
 typedef struct {
     char title[256], artist[256];
 } NowPlaying;
-static NowPlaying g_np[2] = {{"Spotify Radio", "Connected"}};
+static NowPlaying g_np[2] = {{RADIO_TITLE, "Connected"}};
 static volatile LONG g_np_shown = 0;
 
 // nowplaying.txt (written by onevent.cmd): line 1 = title, further lines = artists.
@@ -948,7 +948,7 @@ static void now_playing_poll(void) {
         visible += *c != ' ';
     }
     if (visible == 0) {
-        memory_copy(np->title, "Spotify Radio", sizeof("Spotify Radio")); // unsupported script: never a blank banner
+        memory_copy(np->title, RADIO_TITLE, sizeof(RADIO_TITLE)); // unsupported script: never a blank banner
     }
     ellipsize(np->title, 80); // the game's own longest title is 78 characters
     ellipsize(np->artist, 40);
@@ -1035,7 +1035,7 @@ static void mount_logo_folder(void *filesystem) {
     int mounted = 0;
     void *storage = ((void *(*)(size_t))(g_mount_image + 0x3229c0))(0x50);
     if (storage) {
-        GameString source = game_string("game:\\spotifyradio\\");
+        GameString source = game_string("game:\\" LOGO_FOLDER "\\");
         GameString destination = game_string("game:\\media\\");
         void *volume = ((void *(*)(void *, const void *, unsigned char))(g_mount_image + 0x11e05a0))(storage, &source, 1);
         *(void ***)volume = g_folder_vtable + 1;
@@ -1049,7 +1049,7 @@ static void mount_logo_folder(void *filesystem) {
         ((void (*)(void *))filesystem_methods[0x1f8 / 8])(filesystem);
     }
     InterlockedExchange(&g_mount_state, 2);
-    log_append(mounted ? "SPOTIFY: logo folder mounted; Xbox Music shows the Spotify logo.\r\n"
+    log_append(mounted ? "SPOTIFY: logo folder mounted; Xbox Music shows the " LOGO_NAME " logo.\r\n"
                        : "SPOTIFY: logo folder mount failed; Xbox Music keeps its logo.\r\n");
 }
 
@@ -1180,7 +1180,9 @@ void spotify_bridge_apply_audio_hook(unsigned char *game_image) {
 
 /* Track buttons (track_controls.c): polled with the now-playing check, sent to librespot's stdin
    as next/prev/playpause. Only while Xbox Music (Spotify Radio) plays and the game has the focus. */
+#ifndef LINE_IN_RADIO
 static HANDLE g_command_write = NULL;
+#endif
 static unsigned char *g_controls_image;
 static SHORT(WINAPI *g_key_state)(int) = NULL;
 static HWND(WINAPI *g_foreground_window)(void) = NULL;
@@ -1227,10 +1229,28 @@ static void poll_track_controls(void) {
         keys[c] = key && (g_key_state(key) & 0x8000) != 0;
     }
     int command = track_controls_step(buttons, keys, GetTickCount64());
+#ifdef LINE_IN_RADIO
+    // Songs: the mod's own player. A device: the media session of the player playing into it (no
+    // synthetic key presses: a mod that types keys looks like a keylogger to antivirus engines).
+    static const char *const names[TRACK_COMMANDS] = {"", "next", "previous", "play/pause"};
+    static int reports = 0; // per session: what each button did, so a stray one can be traced
+    const char *route = !command                          ? NULL
+                        : line_in_songs_command(command)  ? " -> the Songs folder\r\n"
+                        : line_in_player_command(command) ? " -> the player in the device\r\n"
+                                                          : " -> nothing: no player with a media session found\r\n";
+    if (route && reports < 50) {
+        ++reports;
+        log_append("LINE-IN: button ");
+        log_append(names[command]);
+        log_append(route);
+    }
+    (void)lines;
+#else
     if (command && g_command_write) {
         DWORD written;
         WriteFile(g_command_write, lines[command], (DWORD)text_length(lines[command]), &written, NULL);
     }
+#endif
 }
 
 void spotify_bridge_install_controls(unsigned char *game_image) {
@@ -1240,8 +1260,10 @@ void spotify_bridge_install_controls(unsigned char *game_image) {
     g_window_process = GetWindowThreadProcessId;
 }
 
+#ifndef LINE_IN_RADIO
 static wchar_t s_exe_path[PATH_CAPACITY];
 static wchar_t s_cmdline[512];
+#endif
 
 static DWORD WINAPI spotify_startup_thread(LPVOID param) {
     (void)param;
@@ -1261,6 +1283,19 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
     }
 
     SetHandleInformation(hPipeRead, 1 /* HANDLE_FLAG_INHERIT */, 0);
+#ifdef LINE_IN_RADIO
+    if (line_in_capture_start(hPipeWrite, s_work_dir)) { // the source's thread owns the write end
+        g_pipe_read_handle = hPipeRead;
+        g_bridge_running = 1;
+        g_pipe_thread = CreateThread(NULL, 0, spotify_pipe_worker, (LPVOID)hPipeRead, 0, NULL);
+        if (g_pipe_thread) {
+            SetThreadPriority(g_pipe_thread, 15 /* THREAD_PRIORITY_TIME_CRITICAL */);
+        }
+    } else {
+        log_append("LINE-IN: the capture thread could not be started.\r\n");
+        CloseHandle(hPipeRead);
+    }
+#else
     HANDLE hCommandRead = NULL; // librespot's stdin: next/prev/playpause from the track buttons
     if (CreatePipe(&hCommandRead, &g_command_write, &sa, 0)) {
         SetHandleInformation(g_command_write, 1 /* HANDLE_FLAG_INHERIT */, 0);
@@ -1325,6 +1360,7 @@ static DWORD WINAPI spotify_startup_thread(LPVOID param) {
     if (hCommandRead) {
         CloseHandle(hCommandRead); // the child keeps its copy
     }
+#endif
 
     for (unsigned tick = 0; g_bridge_running; ++tick) {
         poll_track_controls();
@@ -1347,6 +1383,7 @@ void spotify_bridge_start(const wchar_t *folder) {
         ++n;
     }
     s_work_dir[n] = 0;
+#ifndef LINE_IN_RADIO
     if (!path_join(s_exe_path, s_work_dir, L"librespot.exe")) {
         log_append("SPOTIFY: mod folder path too long; bridge skipped.\r\n");
         return;
@@ -1365,6 +1402,7 @@ void spotify_bridge_start(const wchar_t *folder) {
         jeli.BasicLimitInformation.LimitFlags = 0x00002000; // KILL_ON_JOB_CLOSE
         SetInformationJobObject(g_spotify_job, 9, &jeli, sizeof(jeli));
     }
+#endif
 
     g_startup_thread = CreateThread(NULL, 0, spotify_startup_thread, NULL, 0, NULL);
 }
@@ -1380,6 +1418,9 @@ void spotify_bridge_stop(void) {
         CloseHandle(g_pipe_read_handle);
         g_pipe_read_handle = NULL;
     }
+#ifdef LINE_IN_RADIO
+    line_in_capture_stop(); // after the read end closed: a write blocked on a full pipe fails now
+#endif
     if (g_pipe_thread) {
         WaitForSingleObject(g_pipe_thread, 1000);
         CloseHandle(g_pipe_thread);
@@ -1394,5 +1435,5 @@ void spotify_bridge_stop(void) {
         CloseHandle(g_spotify_job);
         g_spotify_job = NULL;
     }
-    log_append("SPOTIFY: librespot stopped.\r\n");
+    log_append("SPOTIFY: " AUDIO_SOURCE " stopped.\r\n");
 }

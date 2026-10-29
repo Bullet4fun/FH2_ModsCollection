@@ -1,0 +1,7 @@
+LIBRARY ole32.dll
+EXPORTS
+    CoCreateInstance
+    CoInitializeEx
+    CoUninitialize
+    PropVariantClear
+    CoTaskMemFree

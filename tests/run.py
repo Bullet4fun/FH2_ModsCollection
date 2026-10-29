@@ -16,6 +16,9 @@ TESTS = [  # (source, extra sources)
     ("tests/test_mod_log.c", ["common/support.c", "common/mod_log.c"]),
     ("tests/test_eo_settings.c", ["common/support.c", "extra-options/features/bindings.c"]),
     ("tests/test_discord_rpc.c", ["common/support.c", "-lws2_32"]),
+    ("tests/test_line_in.c", ["-I", "line-in-radio", "common/support.c", "common/mod_log.c",
+                              "-lole32", "-lmfplat", "-lmfreadwrite", "-lmfuuid", "-lshell32", "-lapi-ms-win-core-winrt-l1-1-0",
+                              "-lapi-ms-win-core-winrt-string-l1-1-0"]),
 ]
 
 
