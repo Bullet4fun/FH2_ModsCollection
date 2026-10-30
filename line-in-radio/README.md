@@ -42,6 +42,10 @@ The player plays into a virtual cable instead of your speakers, and the game pla
    `VBCABLE_Setup_x64.exe` as administrator and restart Windows. Check that `CABLE Input` is now
    listed in Windows' *Settings → System → Sound* under Output; if it isn't, run the setup as
    administrator again and restart.
+
+   Windows usually makes the new cable the default device, so all other sound goes silent. On the
+   same page set Output back to your speakers or headphones, and Input back to your microphone
+   (instead of `CABLE Output`).
 2. Send your player to the cable: in its own audio settings pick `CABLE Input`, or in Windows'
    *Settings → System → Sound → Volume mixer* (*App volume and device preferences* on Windows 10),
    set the player's output to `CABLE Input`. Leave the game's own output on your speakers or
