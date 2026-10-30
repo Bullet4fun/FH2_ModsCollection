@@ -39,11 +39,17 @@ The HUD shows each file's title and artist tags, or its name: `Artist - Title.mp
 The player plays into a virtual cable instead of your speakers, and the game plays the cable.
 
 1. Download **VB-Audio Virtual Cable** from https://vb-audio.com/Cable/, unzip it, run
-   `VBCABLE_Setup_x64.exe` as administrator and restart Windows.
+   `VBCABLE_Setup_x64.exe` as administrator and restart Windows. Check that `CABLE Input` is now
+   listed in Windows' *Settings → System → Sound* under Output; if it isn't, run the setup as
+   administrator again and restart.
 2. Send your player to the cable: in its own audio settings pick `CABLE Input`, or in Windows'
    *Settings → System → Sound → Volume mixer* (*App volume and device preferences* on Windows 10),
-   set the player's output to `CABLE Input`.
-3. In the game, pick `CABLE Input (VB-Audio Virtual Cable)` as Line-in Radio.
+   set the player's output to `CABLE Input`. Leave the game's own output on your speakers or
+   headphones.
+3. Pick the cable in the game as well: start it, open *Settings → Audio* and, under Radio Volume,
+   set **Line-in Radio** to `CABLE Input (VB-Audio Virtual Cable)`. It starts on `Songs folder`, so
+   without this step the radio doesn't play your player.
+4. Tune the car radio to Line-in Radio and start playing music in the player.
 
 Outside the game you won't hear that player any more; set its output back to your speakers when you
 are done. A spare output you don't listen to (a monitor's HDMI audio with no speakers, a second sound
