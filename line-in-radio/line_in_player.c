@@ -226,12 +226,13 @@ static DWORD WINAPI player_thread(LPVOID param) {
             tick = 0; // the title changes: look again soon
         }
         if (tick % 5 == 0) { // four times a second: a new song's title is caught within 0.25 s
-            // Nothing playing into the device (paused, or between two tracks): keep the player found last,
-            // or a button pressed then went out as a media key, to whichever app took it.
+            // No player playing into the device (paused, or between two tracks; the game or a chat app may
+            // still play there): keep the player found last, so play/pause can start it again.
             unsigned playing = playing_programs(device, programs, 8);
-            if (playing || !session) {
+            void *found = find_session(manager, programs, playing);
+            if (found) {
                 if (session) RELEASE(session);
-                session = find_session(manager, programs, playing);
+                session = found;
             }
             g_have_session = session != NULL;
             void *properties = NULL, *operation = NULL;

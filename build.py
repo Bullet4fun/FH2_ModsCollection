@@ -40,6 +40,7 @@ COMMON_SOURCES = [
     "extra-options/features/livery.c",
     "extra-options/features/media_overrides.c",
     "extra-options/features/vehicle_controls.c",
+    "extra-options/features/headlight_beams.c",
     "extra-options/features/blinkers.c",
     "extra-options/features/aero_tuning.c",
     "extra-options/features/roof_fade.c",
@@ -88,9 +89,9 @@ LINE_IN_SOURCES = ["line-in-radio/line_in_capture.c", "line-in-radio/line_in_son
                    "line-in-radio/line_in_menu.c",
                    *SPOTIFY_SOURCES]
 INCLUDE_DIRS = ["common", "sdk", "extra-options", "spotify-radio", "discord-rpc"]
-SPOTIFY_VERSION = "1.4.0"
-DISCORD_VERSION = "1.3.0"
-LINE_IN_VERSION = "1.0.0"
+SPOTIFY_VERSION = "1.4.1"
+DISCORD_VERSION = "1.4.0"
+LINE_IN_VERSION = "1.0.1"
 
 
 def version_resource(compiler, directory, filename, description, product, version):

@@ -34,6 +34,9 @@ int main(void) {
     CHECK(step(0x40, 2000) == TRACK_NONE && step(0, 2050) == TRACK_NONE && step(0x40, 2150) == TRACK_PREVIOUS,
           "two taps: previous, at once");
     CHECK(step(0, 2200) == TRACK_NONE && step(0, 2600) == TRACK_NONE, "nothing after");
+    CHECK(step(0x40, 2700) == TRACK_NONE && step(0, 2830) == TRACK_NONE && step(0, 2920) == TRACK_NONE && step(0x40, 2990) == TRACK_PREVIOUS &&
+              step(0, 2995) == TRACK_NONE,
+          "a real double tap: each press is held, the window runs from the release");
 
     /* a combination with its first button also bound alone */
     track_bindings[TRACK_PLAY_PAUSE][0] = (TrackBinding){0x240, 1, 0};

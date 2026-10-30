@@ -36,6 +36,12 @@ int main(void) {
     memset(big, 'x', sizeof(big) - 1);
     writes = 0;
     CHECK(rpc_send_packet(NULL, 1, big) == 0 && writes == 0, "send: a payload over 1024 bytes is refused");
+    char activity[1024];
+    g_game_name = "Forza Horizon 3";
+    rpc_build_activity_json(activity, sizeof(activity), 7, 100);
+    CHECK(strcmp(activity, "{\"cmd\":\"SET_ACTIVITY\",\"args\":{\"pid\":7,\"activity\":{\"timestamps\":{\"start\":100},"
+                           "\"assets\":{\"large_image\":\"default\",\"large_text\":\"Forza Horizon 3\"}}},\"nonce\":\"1\"}") == 0,
+          "activity: the running game's name, valid JSON");
 
     printf(fails ? "%d failed\n" : "all passed\n", fails);
     return fails != 0;

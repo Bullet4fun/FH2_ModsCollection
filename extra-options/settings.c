@@ -56,6 +56,7 @@ const SettingDefinition setting_definitions[] = {
     SETTING("HUD", "Notifications", notifications_option, SETTING_BOOLEAN),
     SETTING("HUD", "DisplayUnits", display_units_option, SETTING_BOOLEAN),
     SETTING("HUD", "SpeedZoneVignette", speed_zone_vignette_option, SETTING_BOOLEAN),
+    SETTING("HUD", "VignetteEffect", vignette_effect_option, SETTING_BOOLEAN),
 };
 
 static const SettingDefinition legacy_settings[] = {
@@ -121,7 +122,7 @@ void settings_defaults(ModOptions *options) {
         .in_game_options = 1,
         .return_to_garage = 1,
         .minimap_rotation = 1,
-        .headlights_toggle = 0, // [Vehicle]: off unless the INI turns it on
+        .headlights_toggle = 0, // [Vehicle]: off unless the config file turns it on
         .roof_toggle = 0,
         .turn_signals = 0,
         .sun_shadows_option = 1,
@@ -139,6 +140,7 @@ void settings_defaults(ModOptions *options) {
         .display_units_option = 1,
         .player_character_option = 1,
         .speed_zone_vignette_option = 1,
+        .vignette_effect_option = 1,
         .freeroam_drivatars_option = 1,
         .unlock_aero_tuning = 0,
     };
@@ -346,7 +348,7 @@ static int parse_ini(char *text, ModOptions *options) {
             continue;
         }
 
-        // Retired keys are ignored so an older INI still loads.
+        // Retired keys are ignored so an older config file still loads.
         if ((text_equal_ignore_case(section, "Profile") && text_equal_ignore_case(key, "CustomGamerpic")) ||
         (text_equal_ignore_case(section, "Language") &&
              (text_equal_ignore_case(key, "Text") || text_equal_ignore_case(key, "Audio"))) ||
@@ -379,7 +381,7 @@ static int parse_ini(char *text, ModOptions *options) {
     return 1;
 
 invalid:
-    status_set("REFUSED: invalid INI section, option, or value. See the supplied "
+    status_set("REFUSED: invalid config file section, option, or value. See the supplied "
                "FH2_ExtraOptions.ini.");
     return 0;
 }
@@ -388,7 +390,7 @@ int settings_read(const wchar_t *directory, ModOptions *options) {
     bindings_reset();
     settings_defaults(options);
     if (!path_join(ini_path, directory, MOD_INI_NAME)) {
-        status_set("REFUSED: INI path is too long.");
+        status_set("REFUSED: config file path is too long.");
         return 0;
     }
     HANDLE file = CreateFileW(ini_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
@@ -406,14 +408,14 @@ int settings_read(const wchar_t *directory, ModOptions *options) {
         !ReadFile(file, ini_buffer, (DWORD)size.QuadPart, &bytes_read, NULL) ||
         bytes_read != size.QuadPart) {
         CloseHandle(file);
-        status_set("REFUSED: INI read failed or file exceeds 32768 bytes.");
+        status_set("REFUSED: config file read failed or file exceeds 32768 bytes.");
         return 0;
     }
     CloseHandle(file);
     ini_buffer[bytes_read] = 0;
     for (unsigned index = 0; index < bytes_read; ++index) {
         if (!ini_buffer[index]) {
-            status_set("REFUSED: INI must use UTF-8 or ASCII, not UTF-16.");
+            status_set("REFUSED: config file must use UTF-8 or ASCII, not UTF-16.");
             return 0;
         }
     }

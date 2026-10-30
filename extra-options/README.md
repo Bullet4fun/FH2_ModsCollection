@@ -1,6 +1,6 @@
 # Extra Options
 
-[RokkuDayo's Extra Options](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions) 0.3.9 for Forza
+[RokkuDayo's Extra Options](https://github.com/RokkuDayo/ForzaHorizon2_ExtraOptions) 0.4.4 for Forza
 Horizon 2, as a mod for the Azimuth Mod Loader.
 
 ## Features
@@ -9,10 +9,10 @@ Horizon 2, as a mod for the Azimuth Mod Loader.
 - "Jump to Manufacturer" in the car and rim menus
 - All one-off races from online playable offline, your own car in showcase events
 - Autodrive, drift camera, FOV for every camera
-- Headlights, hazards, turn signals and roof toggles
+- Headlights (they light the road in daytime too), hazards, turn signals and roof toggles
 - Rev your engine in the garage and the engine swap menu
-- Photo mode in the "View Car" menus, time, weather, driver and car lights in photo mode
-- Master volume and dialogue toggles, spring and power units, a hide-the-UI key
+- Photo mode in the "View Car" menus, time (with an hour slider), weather, driver and car lights in photo mode
+- Master volume and dialogue toggles, spring and power units, a hide-the-UI key, vignette toggles
 - Option to turn off Drivatars in free roam; Drivatars can use your local liveries
 - All DLC, VIP and Treasure Map unlocked
 - 4K liveries, unrestricted photo mode, photo supersampling
@@ -23,7 +23,7 @@ Horizon 2, as a mod for the Azimuth Mod Loader.
 
 The custom gamerpic of the original is left out: Azimuth sets your profile picture itself.
 
-Most features are set in the game's own menus. `FH2_ExtraOptions.ini` turns each feature on or off;
+Most features are set in the game's own menus. The config file `FH2_ExtraOptions.ini` turns each feature on or off;
 a feature turned off there disappears from the menus. Its `[Bindings]` section sets every
 controller and keyboard shortcut.
 

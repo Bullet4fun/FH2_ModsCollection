@@ -4,6 +4,7 @@
 #include "features.h"
 #include "roof_fade.h"
 #include "roof_aero.h"
+#include "headlight_beams.h"
 #include "support.h"
 #include "bindings.h"
 #include "offline_events.h"
@@ -37,7 +38,7 @@ typedef void (*CarUpdate)(void *, float, float, unsigned);
 typedef void (*AnimationDetail)(void *, int);
 typedef void (*AnimationSpeed)(void *, float);
 static void vehicle_update(void *car, float dt, float frame_dt, unsigned frame);
-static int headlights_enabled = 1, roof_enabled = 1, turn_signals_enabled = 1; // INI [Vehicle]
+static int headlights_enabled = 1, roof_enabled = 1, turn_signals_enabled = 1; // config file [Vehicle]
 
 void vehicle_controls_commit_options(const ModOptions *options) {
     headlights_enabled = options->headlights_toggle;
@@ -121,6 +122,7 @@ void vehicle_controls_bind(unsigned char *image) {
     blinkers_bind(image, clock_milliseconds);
     roof_fade_prepare_hook(image);
     roof_aero_prepare_hooks(image);
+    headlight_beams_bind(image);
     uintptr_t original = (uintptr_t)(image + 0x2a9400);
     uintptr_t replacement = (uintptr_t)vehicle_update;
     memory_copy(original_callback, &original, 8);
@@ -163,6 +165,7 @@ static void toggle_headlights(void *car) {
     headlights.animation = animation;
     headlights.active = 1;
     headlights.enabled = enabled;
+    headlight_beams_set_car(car,enabled);
     ((HeadlightSetter)(game_image + 0xf74ef0))(car, enabled);
     ((HeadlightSetter)(game_image + 0xf74ee0))(car, 1);
 }
@@ -234,6 +237,8 @@ int vehicle_photo_lights_set(int value){
     ((HeadlightSetter)(game_image+0xf74ee0))(car,value?1:photo_lights.manual);
     if(value)headlights=(HeadlightState){car,photo_lights.animation,1,enabled};
     else headlights=photo_lights.previous;
+    headlight_beams_set_car(car,headlights.active && headlights.enabled && headlights.car==car &&
+                               headlights.animation==photo_lights.animation);
     refresh_photo_lights(car);
     photo_lights.value=value;autodrive_game_release_car(car);return 1;
 }
@@ -542,6 +547,8 @@ static void update_roof_transition(void *car, void *animation, uint64_t now) {
 }
 
 static void maintain_controls(void *car) {
+    headlight_beams_set_car(car,headlights.active && headlights.enabled && headlights.car==car &&
+                               headlights.animation==car_animation(car));
     if (!headlights.active && !roof.active && !roof.pending_event &&
         roof_transition.phase == ROOF_FADE_IDLE && roof_lock.remaining <= 0.0f) {
         return;

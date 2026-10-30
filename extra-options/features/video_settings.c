@@ -12,7 +12,7 @@ typedef struct {
 } SavedVideoSettings;
 
 #define SETTINGS_MAGIC 0x32444846u
-#define SETTINGS_VERSION 19u
+#define SETTINGS_VERSION 20u
 #define DEFAULT_SETTING_VALUES                                                                     \
     {[DRIFT_MODE] = DRIFT_DRIVER_ONLY,                                                             \
      [DRIFT_CHASE_SENSITIVITY] = 35,                                                               \
@@ -39,12 +39,13 @@ typedef struct {
      [OPEN_WORLD_DRIVATARS] = 1,                                                                   \
      [SKILL_POINT_NOTIFICATION] = 1, \
      [SKILL_COUNTER_SHAKE] = 1, \
-     [SPEED_ZONE_VIGNETTE] = 1}
+     [SPEED_ZONE_VIGNETTE] = 1, \
+     [VIGNETTE_EFFECT] = 1}
 
 static const SavedVideoSettings defaults = {SETTINGS_MAGIC, SETTINGS_VERSION,
                                             DEFAULT_SETTING_VALUES};
 static SavedVideoSettings settings = {SETTINGS_MAGIC, SETTINGS_VERSION, DEFAULT_SETTING_VALUES};
-_Static_assert(sizeof(SavedVideoSettings) == 164, "Saved settings ABI");
+_Static_assert(sizeof(SavedVideoSettings) == 168, "Saved settings ABI");
 
 static wchar_t settings_path[PATH_CAPACITY];
 static int import_legacy, import_placement, import_livery;
@@ -189,6 +190,7 @@ void video_settings_load(const wchar_t *directory) {
         {152, SKILL_COUNTER_SHAKE},
         {156, PLAYER_CHARACTER},
         {160, SPEED_ZONE_VIGNETTE},
+        {164, VIGNETTE_EFFECT},
         {sizeof(SavedVideoSettings), VIDEO_SETTING_COUNT},
     };
 
@@ -244,7 +246,7 @@ int video_setting_get(unsigned index) {
     if (index >= VIDEO_SETTING_COUNT) {
         return 0;
     }
-    // a 0.3.9 setting switched off in the INI acts as its default: the game's own behaviour
+    // a setting from 0.3.9 on switched off in the config file acts as its default: the game's own behaviour
     return index >= SHOW_ALL_EVENTS && hidden[index] ? defaults.values[index] : settings.values[index];
 }
 
@@ -339,6 +341,7 @@ void video_settings_show_features(const ModOptions *options) {
                     : index == POWER_UNITS || index == SPRING_UNITS ? options->display_units_option
                     : index == PLAYER_CHARACTER     ? options->player_character_option
                     : index == SPEED_ZONE_VIGNETTE  ? options->speed_zone_vignette_option
+                    : index == VIGNETTE_EFFECT      ? options->vignette_effect_option
                     : index == WHEELSPIN_NOTIFICATION || index == SKILL_POINT_NOTIFICATION ||
                               index == SKILL_COUNTER_SHAKE
                         ? options->notifications_option
@@ -383,7 +386,7 @@ unsigned video_setting_page(unsigned index) {
     return index == SHOW_ALL_EVENTS || index == AUTODRIVE_EVENTS || index == CUSTOM_SHOWCASES ||
                    index == WHEELSPIN_NOTIFICATION || index == SKILL_POINT_NOTIFICATION ||
                    index == POWER_UNITS || index == SPRING_UNITS || index == SKILL_COUNTER_SHAKE || index == PLAYER_CHARACTER || index == SPEED_ZONE_VIGNETTE ||
-                   index < CAMERA_SETTING_COUNT ||
+                   index == VIGNETTE_EFFECT || index < CAMERA_SETTING_COUNT ||
                    (index >= MINIMAP_ORIENTATION && index <= CAR_CHANGE_POSITION)
                ? HUD_PAGE
                : VIDEO_PAGE;

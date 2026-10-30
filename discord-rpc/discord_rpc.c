@@ -13,6 +13,7 @@ static volatile int g_rpc_running = 0;
 static HANDLE g_rpc_thread = NULL;
 static HANDLE g_rpc_pipe = INVALID_HANDLE_VALUE;
 static const char *g_client_id = ""; // the Discord application shown as the game
+static const char *g_game_name = ""; // the picture's tooltip
 
 static size_t rpc_str_len(const char *s) {
     size_t len = 0;
@@ -216,7 +217,9 @@ static void rpc_build_activity_json(char *output, size_t capacity, uint32_t pid,
     rpc_u64_to_str(output, (uint64_t)pid, &off, capacity);
     rpc_str_copy(output, ",\"activity\":{\"timestamps\":{\"start\":", &off, capacity);
     rpc_u64_to_str(output, start_time, &off, capacity);
-    rpc_str_copy(output, "},\"assets\":{\"large_image\":\"default\",\"large_text\":\"Forza Horizon 2\"}}},\"nonce\":\"1\"}", &off, capacity);
+    rpc_str_copy(output, "},\"assets\":{\"large_image\":\"default\",\"large_text\":\"", &off, capacity);
+    rpc_str_copy(output, g_game_name, &off, capacity);
+    rpc_str_copy(output, "\"}}},\"nonce\":\"1\"}", &off, capacity);
 }
 
 static DWORD WINAPI rpc_worker_thread(LPVOID param) {
@@ -295,9 +298,10 @@ static DWORD WINAPI rpc_worker_thread(LPVOID param) {
     return 0;
 }
 
-void discord_rpc_start(const char *client_id) {
+void discord_rpc_start(const char *client_id, const char *game_name) {
     if (g_rpc_running) return;
     g_client_id = client_id;
+    g_game_name = game_name;
     g_rpc_running = 1;
     g_rpc_thread = CreateThread(NULL, 0, rpc_worker_thread, NULL, 0, NULL);
 }

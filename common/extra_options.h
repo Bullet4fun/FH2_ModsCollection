@@ -6,7 +6,7 @@
 #include <windows.h>
 
 #define MOD_NAME "Forza Horizon 2 Extra Options"
-#define MOD_VERSION "0.3.9"
+#define MOD_VERSION "0.4.4"
 #define MOD_INI_NAME L"FH2_ExtraOptions.ini"
 #define MOD_LOG_NAME L"FH2_ExtraOptions.log"
 #define GAME_EXE_NAME L"forza_durango_release_final.exe"
@@ -91,7 +91,7 @@ typedef struct {
     int reserved_motion_blur_override;
     int reserved_filtering_override;
     int photo_mode_samples;
-    /* INI switches for features that had none (1: the feature is installed) */
+    /* config file switches for features that had none (1: the feature is installed) */
     int field_of_view;
     int in_game_options;
     int return_to_garage;
@@ -99,7 +99,7 @@ typedef struct {
     int headlights_toggle;
     int roof_toggle;
     int turn_signals;
-    /* INI switches over options set in the game's menus (FH2_ExtraOptions.dat): 0 keeps the
+    /* config file switches over options set in the game's menus (FH2_ExtraOptions.dat): 0 keeps the
        feature off whatever the menu says */
     int sun_shadows_option;
     int livery_option;
@@ -115,7 +115,7 @@ typedef struct {
     int max_drivatar_liveries;
     int menu_turbo_interval_ms;
     int all_transmission_swaps;
-    /* INI switches over 0.3.9's in-game settings: 0 hides them, the game keeps its own behaviour */
+    /* config file switches over in-game settings from 0.3.9 on: 0 hides them, the game keeps its own behaviour */
     int show_all_races_option;
     int custom_showcases_option;
     int dialogue_option;
@@ -125,6 +125,7 @@ typedef struct {
     int display_units_option;
     int player_character_option;
     int speed_zone_vignette_option;
+    int vignette_effect_option;
     int freeroam_drivatars_option;
 } ModOptions;
 #endif

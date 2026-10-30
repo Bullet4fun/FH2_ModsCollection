@@ -1,6 +1,6 @@
 # FH2 Mods Collection
 
-Mods for **Forza Horizon 2** on Azimuth 1.0.3 or newer. They need the
+Mods for **Forza Horizon 2** (Discord RPC: every game Azimuth runs) on Azimuth 1.0.3 or newer. They need the
 [Azimuth Mod Loader](https://github.com/Bullet4fun/Azimuth_ModLoader).
 
 | Mod | What it does |
@@ -8,7 +8,7 @@ Mods for **Forza Horizon 2** on Azimuth 1.0.3 or newer. They need the
 | [Extra Options](extra-options/README.md) | RokkuDayo's Extra Options: car change anywhere, autodrive, drift camera, FOV, unlocks and more |
 | [Spotify Radio](spotify-radio/README.md) | Spotify as an in-game radio station (Spotify Premium only) |
 | [Line-in Radio](line-in-radio/README.md) | Your own music files, or any player through a virtual cable, as the in-game radio |
-| [Discord RPC](discord-rpc/README.md) | Discord Rich Presence |
+| [Discord RPC](discord-rpc/README.md) | Discord Rich Presence, in every game Azimuth runs (FH2, F&F, FH3, FM5, FM6) |
 
 ## Install
 
